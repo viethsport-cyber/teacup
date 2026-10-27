@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '1.3.1';
+  const APP_VERSION = '1.4.0';
   const STORE_KEY = 'teacup-data';
   const SAFETY_KEY = 'teacup-data-tagessicherung';
   const SCHEMA = 1;
@@ -55,6 +55,13 @@
     'Test-Unit (löschen);13;thank you;danke;Ausdruck;;Thank you for the present.;Danke für das Geschenk.;„th“: Zungenspitze leicht zwischen die Zähne'
   ].join('\n');
 
+  const CARD_PROMPT = 'Auf den Fotos sind handgeschriebene Vokabel-Karteikarten meiner Tochter (Englisch, Klasse 5). Vorderseite Englisch, Rückseite Deutsch.\n' +
+    '- Ordne jede Vorderseite der passenden Rückseite zu. Wenn die Karten beim Umdrehen gespiegelt liegen, berücksichtige das. Wenn die Zuordnung unsicher ist, schreib es dazu.\n' +
+    '- Gib eine Zeile pro Karte aus, im Format: englisch = deutsch\n' +
+    '- Mehrere deutsche Bedeutungen mit Schrägstrich trennen. Sätze mit Satzzeichen wie auf der Karte.\n' +
+    '- Übernimm die Wörter so, wie sie gemeint sind, aber korrigiere keine Rechtschreibung stillschweigend: Wenn auf einer Karte vermutlich ein Schreibfehler steht (z. B. „freind“), gib die richtige britische Schreibweise aus und liste den Fehler danach separat auf.\n' +
+    '- Nichts erfinden. Unleserliche Karten nicht raten, sondern danach auflisten.\n' +
+    '- Gib die Zeilen in einem Codeblock aus.';
   const PHOTO_PROMPT = 'Wandle die Vokabeln auf diesem Foto (Green Line 1, Klett) in folgendes Format um.\n' +
     '- Eine Zeile pro Vokabel, Satz oder Redewendung, Trennzeichen Semikolon. Satzzeichen (? ! .) wie im Buch übernehmen.\n' +
     '- Erste Zeile ist genau diese Kopfzeile: unit;seite;englisch;deutsch;wortart;hinweis;beispiel_en;beispiel_de;aussprache\n' +
@@ -162,6 +169,7 @@
     book: '<path d="M6 3h11a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6zM9 3v18M12 8h3M12 12h3"/>',
     camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
     file: '<path d="M6 3h8l4 4v14H6zM14 3v4h4M9 13h6M9 17h6"/>',
+    clip: '<path d="M9 4h6v3H9zM9 5.5H6a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-3M8.5 12h7M8.5 16h5"/>',
     trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'
   };
   // Londoner Skyline: Big Ben, Tower Bridge, London Eye, Doppeldeckerbus (Farben über CSS, auch im Dunkelmodus)
@@ -908,6 +916,15 @@
     let map = null;
     const first = delim ? splitLine(lines[0], delim).map((s) => s.toLowerCase().replace(/\s+/g, '_')) : [];
     if (first.includes('englisch') || first.includes('english')) { map = first.map((c) => ALIAS[c] || c); lines.shift(); }
+    // Karteikarten-Modus: Zeilen ohne Trenner abwechselnd Englisch / Deutsch (z. B. aus Google Lens)
+    if (S.impPairs && !delim && !map) {
+      const merged = [];
+      for (let i = 0; i < lines.length; i++) {
+        if (/\s(?:=|[-–—:])\s|=/.test(lines[i]) || i + 1 >= lines.length) merged.push(lines[i]);
+        else { merged.push(lines[i].trim() + ' = ' + lines[i + 1].trim()); i++; }
+      }
+      lines.splice(0, lines.length, ...merged);
+    }
     const def = importDefaults();
     const book = bookById(S.bookId) || D.books[0];
     const seen = new Set();
@@ -942,9 +959,12 @@
       '<label for="imp-page">Seite</label><input type="text" id="imp-page" data-change="imppage" inputmode="numeric" value="' + esc(S.impPage || '') + '" placeholder="z. B. 14"></div>' +
       '<div class="card"><h3 style="margin-top:0">2. Wörter und Sätze hinzufügen</h3><p>Drei Wege, alle landen unten im Textfeld zum Prüfen:</p>' +
       '<div class="row"><label class="btn" style="margin:0">' + ic('camera') + 'Foto der Vokabelseite<input type="file" accept="image/*" data-change="photo" hidden></label>' +
-      '<label class="btn secondary" style="margin:0">' + ic('file') + 'Textdatei wählen<input type="file" accept=".txt,.csv,.tsv,text/plain,text/csv" data-change="textfile" hidden></label></div>' +
+      '<label class="btn secondary" style="margin:0">' + ic('file') + 'Textdatei wählen<input type="file" accept=".txt,.csv,.tsv,text/plain,text/csv" data-change="textfile" hidden></label>' +
+      '<button class="btn secondary" data-act="pasteclip">' + ic('clip') + 'Aus Zwischenablage</button></div>' +
+      '<p class="small">Das Foto erkennt gedruckten Text (Buchseite). Für Handschrift siehe unten „Karteikarten und Handschrift“.</p>' +
       '<p id="ocrmsg" class="small">' + esc(S.ocrMsg || '') + '</p>' +
       '<label for="imp">Oder eintippen bzw. einfügen – ein Wort pro Zeile:</label><textarea id="imp" placeholder="friend = Freund / Freundin\nto have breakfast = frühstücken\nWhat\'s your name? = Wie heißt du?">' + esc(S.importText) + '</textarea>' +
+      '<label class="check"><input type="checkbox" data-change="imppairs" ' + (S.impPairs ? 'checked' : '') + '> Karteikarten: Zeilen abwechselnd Englisch, Deutsch (z. B. aus Google Lens)</label>' +
       '<details><summary><b>Welche Schreibweisen gehen?</b></summary><ul class="small"><li><b>englisch = deutsch</b> (auch mit „ - “ oder „ : “ dazwischen)</li><li>Sätze und Redewendungen genauso: <i>How are you? = Wie geht es dir?</i> (bei Sätzen am besten „=“ verwenden)</li><li>Mehrere Bedeutungen mit Schrägstrich: <i>Freund / Freundin</i></li><li>Mit Hinweis: <i>child ; Kind ; Plural: children</i></li><li>Aus Excel kopiert (Spalten Englisch, Deutsch) oder im vollen Importformat mit Kopfzeile:<br><code>unit;seite;englisch;deutsch;wortart;hinweis;beispiel_en;beispiel_de;aussprache</code></li><li>Textdatei: dieselben Schreibweisen, gespeichert als .txt oder .csv (in Excel: „Speichern unter → CSV“)</li></ul></details>' +
       '<div class="row" style="margin-top:10px"><button class="btn secondary" data-act="sample">20 Testwörter</button><button class="btn" data-act="preview">3. Vorschau</button></div></div>';
     if (S.preview) {
@@ -958,6 +978,11 @@
         P.map((r) => '<tr' + (r.errors.length ? ' class="err"' : '') + '><td>' + r.line + '</td><td>' + esc(r.unit) + '</td><td>' + esc(r.page) + '</td><td>' + esc(r.en) + '</td><td>' + esc(r.de.join(' / ')) + '</td><td>' + (r.errors.length ? esc(r.errors.join(', ')) : r.dup ? 'doppelt, wird übersprungen' : r.existing ? 'aktualisieren' : 'neu') + '</td></tr>').join('') +
         '</tbody></table></div><div class="row" style="margin-top:12px"><button class="btn secondary" data-act="cancelimport">Verwerfen</button><button class="btn good" data-act="doimport"' + (ok.length ? '' : ' disabled') + '>' + ok.length + ' Wörter übernehmen</button></div></div>';
     }
+    h += '<div class="card"><h3 style="margin-top:0">' + ic('pencil') + 'Karteikarten und Handschrift</h3>' +
+      '<p class="small">Handschrift erkennt die App selbst nicht zuverlässig. Diese zwei kostenlosen Wege funktionieren gut:</p>' +
+      '<details open><summary><b>A. Claude-Chat (empfohlen, am genauesten)</b></summary><ol><li>Karten nebeneinander legen und die Vorderseiten fotografieren. Dann jede Karte <b>an ihrem Platz</b> umdrehen und die Rückseiten fotografieren.</li><li>Beide Fotos in einem Claude-Chat hochladen, zusammen mit dem Text unten.</li><li>Ergebnis kopieren, hier auf „Aus Zwischenablage“ tippen, prüfen, „Vorschau“.</li></ol>' +
+      '<textarea readonly id="cardprompt" style="min-height:200px">' + esc(CARD_PROMPT) + '</textarea><button class="btn secondary" data-act="copycard" style="margin-top:10px">Text kopieren</button></details>' +
+      '<details><summary><b>B. Google Lens (direkt auf dem Handy)</b></summary><ol><li>Kamera-App oder Google-App öffnen → Lens-Symbol → Karte fotografieren → „Text“ → „Alles auswählen“ → „Kopieren“.</li><li>Erst Vorderseite, dann Rückseite derselben Karte, jeweils hier mit „Aus Zwischenablage“ einfügen.</li><li>Haken bei „Karteikarten: Zeilen abwechselnd Englisch, Deutsch“ setzen, dann „Vorschau“.</li></ol><p class="small">Bitte jede Zeile prüfen: Handschrift wird nie fehlerfrei erkannt.</p></details></div>';
     h += '<div class="card"><details><summary><b>Genauer: Foto über einen Claude-Chat umwandeln</b></summary><p class="small">Die Fotoerkennung in der App arbeitet ohne Internet auf dem Gerät und braucht oft kleine Korrekturen. Bei schwierigen Seiten ist ein Claude-Chat genauer:</p><ol><li>Vokabelseite fotografieren.</li><li>Foto in einem Claude-Chat hochladen, zusammen mit dem Text unten.</li><li>Ergebnis prüfen, kopieren und oben einfügen.</li></ol>' +
       '<textarea readonly id="photoprompt" style="min-height:220px">' + esc(PHOTO_PROMPT) + '</textarea><button class="btn secondary" data-act="copyprompt" style="margin-top:10px">Text kopieren</button></details></div>';
     return h;
@@ -1293,6 +1318,14 @@
     preview: () => { syncImportFields(); S.preview = parseImport(S.importText); if (!S.preview.length) toast('Keine Zeilen gefunden.'); rerender(); },
     cancelimport: () => { S.preview = null; rerender(); },
     doimport: () => doImport(),
+    copycard: async () => { try { await navigator.clipboard.writeText(CARD_PROMPT); toast('Kopiert.'); } catch (e) { $('#cardprompt').select(); toast('Bitte markierten Text kopieren.'); } },
+    pasteclip: async () => {
+      try {
+        const t = await navigator.clipboard.readText();
+        if (!t || !t.trim()) return toast('Die Zwischenablage ist leer.');
+        syncImportFields(); addImportText(t.replace(/^```[a-z]*\s*|```\s*$/gim, '')); S.ocrMsg = 'Text eingefügt. Bitte jede Zeile prüfen.'; rerender();
+      } catch (e) { toast('Einfügen nicht erlaubt. Bitte lange ins Textfeld tippen → „Einfügen“.'); }
+    },
     copyprompt: async () => { try { await navigator.clipboard.writeText(PHOTO_PROMPT); toast('Kopiert.'); } catch (e) { $('#photoprompt').select(); toast('Bitte markierten Text kopieren.'); } },
     'rep-yes': (el) => decideReport(el.dataset.id, true),
     'rep-no': (el) => decideReport(el.dataset.id, false),
@@ -1332,6 +1365,7 @@
     impunit: (el) => { S.importText = $('#imp').value; S.impUnit = el.value; S.preview = null; rerender(); },
     impnewunit: (el) => { S.impNewUnit = el.value; },
     imppage: (el) => { S.impPage = el.value; },
+    imppairs: (el) => { S.impPairs = el.checked; if (S.preview) { syncImportFields(); S.preview = parseImport(S.importText); rerender(); } },
     textfile: (el) => { if (el.files && el.files[0]) readTextFile(el.files[0]); el.value = ''; },
     photo: (el) => { if (el.files && el.files[0]) runOcr(el.files[0]); el.value = ''; }
   };
