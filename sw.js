@@ -1,8 +1,10 @@
 // Service Worker: macht die App offline nutzbar.
 // Wichtig: Der Lernstand liegt NICHT im Cache, sondern im Gerätespeicher (localStorage).
 // Ein Update tauscht nur die Programmdateien aus, die Daten bleiben unberührt.
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 const CACHE = 'teacup-' + VERSION;
+// Große Zusatzdateien (Fotoerkennung) werden erst bei Bedarf geladen und dann dauerhaft gespeichert.
+const VENDOR = 'teacup-vendor-1';
 const FILES = [
   './', './index.html', './styles.css', './app.js', './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png'
@@ -15,7 +17,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('teacup-') && k !== CACHE).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('teacup-') && k !== CACHE && k !== VENDOR).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -27,6 +29,10 @@ self.addEventListener('message', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
+  if (new URL(req.url).pathname.includes('/vendor/')) {
+    e.respondWith(caches.open(VENDOR).then((c) => c.match(req).then((hit) => hit || fetch(req).then((res) => { if (res.ok) c.put(req, res.clone()); return res; }))));
+    return;
+  }
   e.respondWith(
     caches.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).catch(() => caches.match('./index.html')))
   );

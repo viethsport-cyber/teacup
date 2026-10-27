@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '1.0.0';
+  const APP_VERSION = '1.1.0';
   const STORE_KEY = 'teacup-data';
   const SAFETY_KEY = 'teacup-data-tagessicherung';
   const SCHEMA = 1;
@@ -13,6 +13,23 @@
   const BOX_NAME = { 1: 'Fach 1', 2: 'Fach 2', 3: 'Fach 3', 4: 'Fach 4', 5: 'Fach 5', 6: 'Sitzt' };
   const STATUS = { kommt: 'Kommt noch', aktuell: 'Aktuell', gelernt: 'Gelernt' };
   const POS = ['', 'Nomen', 'Verb', 'Adjektiv', 'Adverb', 'Präposition', 'Pronomen', 'Konjunktion', 'Zahlwort', 'Interjektion', 'Ausdruck'];
+
+  // Feste Schwerpunkt-Bibliothek: typische Stolpersteine für deutschsprachige Kinder.
+  // say = auch beim Aussprechen relevant
+  const CATS = [
+    { id: 'th', label: '„th“', re: /th/gi, say: true, tip: '„th“: Zungenspitze leicht zwischen die Zähne. Geschrieben immer t + h.' },
+    { id: 'w', label: '„w“', re: /\bw(?!r)/gi, say: true, tip: '„w“: Lippen rund wie beim Pusten, nicht wie das deutsche „w“.' },
+    { id: 'v', label: '„v“', re: /v/gi, say: true, tip: '„v“: Oberzähne auf die Unterlippe, wie das deutsche „w“.' },
+    { id: 'silent', label: 'stumme Buchstaben', re: /\bkn|\bwr|mb\b|igh|ight|alk|\bhour|\bhonest/gi, say: true, tip: 'Manche Buchstaben schreibt man, spricht sie aber nicht: knife, write, night.' },
+    { id: 'final', label: 'weiches Wortende (b, d, g)', re: /[bdg]\b/gi, say: true, tip: 'Wortende weich sprechen: „dog“, nicht „dok“. Geschrieben mit b, d oder g.' },
+    { id: 'ie', label: '„ie“ und „ei“', re: /ie|ei/gi, tip: 'Genau hinschauen: friend mit „ie“, their mit „ei“. Am besten buchstabieren.' },
+    { id: 'our', label: 'britisch „our“', re: /our/gi, tip: 'Britisches Englisch: colour, favourite, neighbour – mit „ou“.' },
+    { id: 'vowels', label: 'Selbstlaut-Paare (ea, ee, oo, ai …)', re: /ea|ee|oo|ai|ay|oa|ou|ow/gi, tip: 'Zwei Selbstlaute hintereinander: ansehen, anhören, buchstabieren (t-e-a-ch-e-r).' },
+    { id: 'double', label: 'doppelte Buchstaben', re: /([a-z])\1/gi, tip: 'Achte auf doppelte Buchstaben: dinner, sorry, apple.' },
+    { id: 'case', label: 'Großschreibung', re: /\b[A-Z]/g, tip: 'Groß schreibt man: Namen, Wochentage, Monate, Länder und „I“.' },
+    { id: 'apos', label: 'Apostroph und Kurzformen', re: /'/g, tip: 'Der Apostroph ersetzt Buchstaben: I\'m = I am, don\'t = do not.' },
+    { id: 'be', label: '„I am“, „you are“, „he is“', re: /\b(am|are|is|i'm|you're|he's|she's|it's|we're|they're)\b/gi, tip: 'I am · you are · he/she/it is · we are · they are' }
+  ];
 
   const SAMPLE_CSV = [
     'unit;seite;englisch;deutsch;wortart;hinweis;beispiel_en;beispiel_de;aussprache',
@@ -64,7 +81,8 @@
       books: [{ id: 'gl1', name: 'Green Line 1' }],
       units: [], vocab: [], progress: {}, reports: [],
       settings: { nickname: '', dailyMinutes: 15, toOptional: true, speech: false, paperAllowed: true, paperChosen: false, sound: true, theme: 'auto' },
-      pin: null, stats: { days: {} }, newByDay: {}, lastBackupAt: null
+      pin: null, stats: { days: {} }, newByDay: {}, lastBackupAt: null,
+      skills: {}, focusMode: {}, customCats: []
     };
   }
   // Ergänzt fehlende Felder, löscht aber nie vorhandene Daten (wichtig für Updates).
@@ -307,7 +325,17 @@
     let newLeft = Math.max(0, NEW_PER_DAY - introducedToday() - hw.filter((v) => !prog(v.id).seen).length);
     const freshPick = fresh.slice(0, newLeft);
     const list = [...hw, ...due, ...freshPick].slice(0, ROUND_MAX);
-    return { list, hw: hw.length, due: due.length, fresh: freshPick.length, freshWaiting: fresh.length };
+    // Schwerpunkt-Wörter zusätzlich (ändern die Lernkartei nicht), nur wenn ohnehin gelernt wird
+    const focusIds = new Set();
+    const weak = weakCats();
+    if (list.length && weak.length && list.length < ROUND_MAX) {
+      const inList = new Set(list.map((v) => v.id));
+      const cand = [];
+      weak.forEach((w) => catWords(w.cat.id).forEach((v) => { if (!inList.has(v.id) && !cand.includes(v)) cand.push(v); }));
+      cand.sort((a, b) => prog(b.id).wrong - prog(a.id).wrong || prog(a.id).box - prog(b.id).box);
+      cand.slice(0, Math.min(5, ROUND_MAX - list.length)).forEach((v) => { list.push(v); focusIds.add(v.id); });
+    }
+    return { list, focusIds, hw: hw.length, due: due.length, fresh: freshPick.length, freshWaiting: fresh.length };
   }
   function recordWrite(vid, ok) {
     const p = prog(vid), t = today();
@@ -330,6 +358,72 @@
   const minutesToday = () => Math.round(((D.stats.days[today()] || {}).ms || 0) / 60000);
   const backupDue = () => D.vocab.length > 0 && (!D.lastBackupAt || daysBetween(D.lastBackupAt.slice(0, 10), today()) >= 30);
   const openReports = () => D.reports.filter((r) => r.status === 'offen');
+
+  // ---------- Schwerpunkte: erkennen, was noch nicht sitzt ----------
+  const escRe = (t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const allCats = () => CATS.concat((D.customCats || []).map((c) => ({ id: c.id, label: '„' + c.text + '“', re: new RegExp(escRe(c.text), 'gi'), say: true, tip: c.tip || 'Dein eigener Schwerpunkt: „' + c.text + '“. Genau hinschauen und laut sprechen.', custom: true })));
+  const catById = (id) => allCats().find((c) => c.id === id);
+  // Welche Kategorien stecken in einem Wort, und an welchen Stellen?
+  function catsIn(str) {
+    const out = [];
+    for (const c of allCats()) {
+      const spans = []; c.re.lastIndex = 0; let m;
+      while ((m = c.re.exec(str))) { spans.push([m.index, m.index + m[0].length]); if (!m[0].length) c.re.lastIndex++; }
+      if (spans.length) out.push({ cat: c, spans });
+    }
+    return out;
+  }
+  function bump(key, err, ex) {
+    const sk = D.skills[key] || (D.skills[key] = { t: 0, e: 0, n: 0, ex: [] });
+    // ältere Ergebnisse zählen weniger, Fortschritte werden so sichtbar
+    sk.t = sk.t * 0.92 + 1; sk.e = sk.e * 0.92 + (err ? 1 : 0); sk.n++; sk.last = today();
+    if (err && ex) { sk.ex.unshift(Object.assign({ day: today() }, ex)); sk.ex = sk.ex.slice(0, 5); }
+  }
+  // Schriftliche Antwort auswerten. Gibt die Kategorien zurück, in denen der Fehler lag.
+  function trackWrite(v, answer, grade) {
+    if (!answer || !grade || grade.kind === 'empty') return [];
+    const target = grade.target, a = normEn(answer);
+    // Völlig andere Antwort = Wort nicht gewusst, kein Rechtschreibmuster
+    if (!grade.ok && grade.kind === 'wrong' && lev(a.toLowerCase(), target.toLowerCase()) > Math.ceil(target.length / 2)) return [];
+    const errIdx = new Set();
+    if (!grade.ok && grade.kind !== 'case') {
+      let j = 0;
+      for (const o of diffOps(a, target)) {
+        if (o.t === 'm') j++;
+        else if (o.t === 's' || o.t === 'd') { errIdx.add(j); j++; }
+        else { errIdx.add(j); errIdx.add(j - 1); }
+      }
+    }
+    const hit = [];
+    for (const { cat, spans } of catsIn(target)) {
+      const err = !grade.ok && (cat.id === 'case' ? grade.kind === 'case' : grade.kind !== 'case' && spans.some(([x, y]) => [...errIdx].some((i) => i >= x && i < y)));
+      bump(cat.id + ':write', err, { en: v.en, answer: a });
+      if (err) hit.push(cat);
+    }
+    return hit;
+  }
+  function trackSay(v, ok, heard) {
+    for (const { cat } of catsIn(normEn(v.en))) if (cat.say) bump(cat.id + ':say', !ok, { en: v.en, answer: heard || '' });
+  }
+  const skillRate = (key) => { const sk = D.skills[key]; return sk && sk.n >= 3 ? sk.e / sk.t : null; };
+  const WEAK = 0.34;
+  // Aktuelle Schwerpunkte: automatisch erkannt oder von den Eltern festgelegt
+  function weakCats() {
+    const out = [];
+    for (const c of allCats()) {
+      const mode = (D.focusMode || {})[c.id] || 'auto';
+      if (mode === 'off') continue;
+      const w = skillRate(c.id + ':write'), sy = skillRate(c.id + ':say');
+      const autoWeak = (w !== null && w >= WEAK) || (sy !== null && sy >= WEAK);
+      if (mode === 'on' || autoWeak) out.push({ cat: c, write: w, say: sy, sayWeak: mode === 'on' ? !!c.say : sy !== null && sy >= WEAK, manual: mode === 'on', score: Math.max(w || 0, sy || 0) + (mode === 'on' ? 1 : 0) });
+    }
+    return out.sort((a, b) => b.score - a.score);
+  }
+  function catWords(catId) {
+    const c = catById(catId); if (!c) return [];
+    return D.vocab.filter((v) => { const u = unitById(v.unitId); c.re.lastIndex = 0; return u && u.status !== 'kommt' && prog(v.id).seen && c.re.test(v.en); });
+  }
+  const wordWeakCats = (v, weak) => { const ids = new Set(catsIn(normEn(v.en)).map((x) => x.cat.id)); return weak.filter((w) => ids.has(w.cat.id)); };
 
   // ---------- Zustand der Oberfläche ----------
   const S = { view: 'home', R: null, tab: 'vocab', bookId: 'gl1', unitId: null, editId: null, importText: '', preview: null, unlocked: false, pinStep: null, pinFirst: '', backupFile: null, speechConsent: false };
@@ -367,6 +461,7 @@
       if (P.hw) parts.push(P.hw + ' Hausaufgabe');
       if (P.due) parts.push(Math.min(P.due, ROUND_MAX) + ' Wiederholung');
       if (P.fresh) parts.push(P.fresh + ' neu');
+      if (P.focusIds.size) parts.push(P.focusIds.size + ' Schwerpunkt 🎯');
       main = '<div class="card"><h2 style="margin-top:0">Heute dran: ' + P.list.length + ' Wörter</h2><p class="muted">' + esc(parts.join(' · ')) + '</p>' +
         (D.settings.paperAllowed ? '<label class="check"><input type="checkbox" data-change="paper" ' + (D.settings.paperChosen ? 'checked' : '') + '> Ich schreibe auf Papier</label>' : '') +
         '<button class="btn big" data-act="start">Lernrunde starten</button></div>';
@@ -381,21 +476,38 @@
       '<div class="card"><div class="row"><b>Heute gelernt</b><span class="spacer"></span><span>' + mins + ' von ' + goal + ' Min.</span></div>' +
       '<div class="progress" style="margin-top:8px"><div style="width:' + Math.min(100, Math.round((mins / goal) * 100)) + '%"></div></div>' +
       (mins >= goal ? '<p class="center"><b>Für heute geschafft! 💪</b> Weiterlernen ist freiwillig.</p>' : '') + '</div>' +
+      focusCardHtml() +
       '<div class="card"><h3 style="margin-top:0">Deine Lernkartei</h3>' + boxesHtml(boxCounts(true)) + '</div>' +
       (installEvt ? '<button class="btn secondary big" data-act="install">📲 App auf dem Startbildschirm installieren</button>' : '');
   }
 
+  function focusCardHtml() {
+    const weak = weakCats().filter((w) => catWords(w.cat.id).length).slice(0, 3);
+    if (!weak.length) return '';
+    return '<div class="card"><h3 style="margin-top:0">🎯 Deine Schwerpunkte</h3><p class="small">Das übst du gerade besonders. Jede Übung dauert 2–3 Minuten.</p>' +
+      weak.map((w) => '<button class="btn secondary" style="width:100%;margin-top:8px" data-act="focus" data-id="' + esc(w.cat.id) + '">' + esc(w.cat.label) + ' üben</button>').join('') + '</div>';
+  }
+
   // ---------- Lernrunde ----------
-  function startRound(extra) {
-    let list;
-    if (extra) {
+  function startRound(extra, focusCat) {
+    let list, focusIds = new Set();
+    if (focusCat) {
+      list = catWords(focusCat).sort(() => Math.random() - 0.5).sort((a, b) => prog(b.id).wrong - prog(a.id).wrong).slice(0, 10);
+      list.forEach((v) => focusIds.add(v.id));
+      if (!list.length) return toast('Dazu gibt es noch keine gelernten Wörter.');
+    } else if (extra) {
       list = D.vocab.filter((v) => { const u = unitById(v.unitId); return u && u.status !== 'kommt' && prog(v.id).seen; });
       list = list.sort(() => Math.random() - 0.5).slice(0, 10);
-    } else list = plan().list;
+    } else { const P = plan(); list = P.list; focusIds = P.focusIds; }
     if (!list.length) return;
+    const weak = weakCats();
     S.R = {
-      extra, paper: D.settings.paperAllowed && D.settings.paperChosen,
-      tasks: list.map((v) => ({ vid: v.id, pass: 1, isNew: !prog(v.id).seen })),
+      extra, focusCat: focusCat || null, paper: D.settings.paperAllowed && D.settings.paperChosen,
+      tasks: list.map((v) => {
+        const wc = wordWeakCats(v, weak);
+        const fc = focusCat ? catById(focusCat) : null;
+        return { vid: v.id, pass: 1, isNew: !prog(v.id).seen, focus: focusIds.has(v.id), sayFocus: focusIds.has(v.id) && ((fc && fc.say && speechOn()) || wc.some((w) => w.sayWeak)) };
+      }),
       i: 0, total: list.length, doneWords: new Set(), speakOk: {}, moves: {}, firstOk: 0, reported: new Set(), last: Date.now()
     };
     S.R.tasks.forEach((t) => (t.phase = 'write'));
@@ -410,8 +522,8 @@
     let idx = order.indexOf(T.phase) + 1;
     while (idx < order.length) {
       const ph = order[idx];
-      if (ph === 'speak' && (T.pass === 1 || !S.R.speakOk[T.vid])) break;
-      if (ph === 'repeat' && T.isNew && T.pass === 1) break;
+      if (ph === 'speak' && !T.focus && (T.pass === 1 || !S.R.speakOk[T.vid])) break;
+      if (ph === 'repeat' && T.pass === 1 && (T.isNew || T.sayFocus)) break;
       idx++;
     }
     if (idx < order.length) { T.phase = order[idx]; T.ui = {}; save(); return render(); }
@@ -421,7 +533,7 @@
     const R = S.R, T = curTask();
     if (T.speakOk === true) R.speakOk[T.vid] = true;
     if (T.writeOk && (T.speakOk !== false)) R.doneWords.add(T.vid);
-    else R.tasks.push({ vid: T.vid, pass: T.pass + 1, isNew: false, phase: 'write' });
+    else R.tasks.push({ vid: T.vid, pass: T.pass + 1, isNew: false, focus: T.focus, phase: 'write' });
     R.i++;
     save();
     if (R.i >= R.tasks.length) { addLearnTime(0); D.stats.days[today()].rounds++; save(); S.view = 'summary'; }
@@ -432,16 +544,17 @@
     T.writeOk = ok; T.answer = answer; T.grade = grade;
     if (T.pass === 1) {
       if (ok) R.firstOk++;
-      if (!R.extra) R.moves[T.vid] = recordWrite(T.vid, ok);
+      if (!R.extra && !T.focus) R.moves[T.vid] = recordWrite(T.vid, ok);
+      if (!R.paper) { T.errCats = trackWrite(vocabById(T.vid), answer, grade); save(); }
     } else if (ok) { const v = vocabById(T.vid); if (v && v.homework) { v.homework = false; save(); } }
     beep(ok);
   }
   function roundHeader() {
     const R = S.R, T = curTask();
     const pct = Math.round((R.doneWords.size / R.total) * 100);
-    const label = T.pass > 1 ? 'Noch einmal üben' : 'Wort ' + Math.min(R.total, R.i + 1) + ' von ' + R.total;
+    const label = T.pass > 1 ? 'Noch einmal üben' : 'Wort ' + Math.min(R.total, R.i + 1) + ' von ' + R.total + (T.focus && !R.focusCat ? ' · 🎯' : '');
     const steps = { write: '✏️ Schreiben', check: '✅ Kontrollieren', speak: '🗣️ Sprechen', repeat: '🔁 Nachsprechen' };
-    return '<div class="topbar"><button class="iconbtn" data-act="quit" aria-label="Runde beenden">✕</button><h1 style="font-size:1.05rem">' + esc(label) + (R.extra ? ' · Extra' : '') + '</h1><span class="pill">' + steps[T.phase] + '</span></div>' +
+    return '<div class="topbar"><button class="iconbtn" data-act="quit" aria-label="Runde beenden">✕</button><h1 style="font-size:1.05rem">' + esc(label) + (R.extra ? ' · Extra' : R.focusCat ? ' · 🎯' : '') + '</h1><span class="pill">' + steps[T.phase] + '</span></div>' +
       '<div class="progress"><div style="width:' + pct + '%"></div></div><div class="steps"><span>' + R.doneWords.size + ' geschafft</span><span>' + R.total + ' Wörter</span></div>';
   }
   const speakBtns = (text) => '<div class="speak-row"><button class="btn secondary" data-act="say" data-text="' + esc(text) + '">🔊 Anhören</button><button class="btn secondary" data-act="sayslow" data-text="' + esc(text) + '">🐢 Langsam</button></div>';
@@ -452,7 +565,9 @@
     let body = '';
     const meta = [v.pos, unitById(v.unitId) ? unitById(v.unitId).name + (v.page ? ', S. ' + v.page : '') : ''].filter(Boolean).join(' · ');
     if (T.phase === 'write') {
-      body = '<div class="card"><div class="prompt"><div class="label">Wie heißt das auf Englisch?</div><div class="word">' + esc(deText(v)) + '</div><div class="meta">' + esc(meta) + '</div></div>';
+      const fc = S.R.focusCat && catById(S.R.focusCat);
+      if (fc && T.pass === 1 && S.R.i === 0) body += '<div class="tip">🎯 <b>Dein Schwerpunkt:</b> ' + esc(fc.tip) + '</div>';
+      body += '<div class="card"><div class="prompt"><div class="label">Wie heißt das auf Englisch?</div><div class="word">' + esc(deText(v)) + '</div><div class="meta">' + esc(meta) + '</div></div>';
       if (S.R.paper) body += '<p class="center">Schreib das englische Wort auf dein Papier.</p><button class="btn big" data-act="reveal">Aufdecken</button></div>';
       else body += '<input type="text" id="ans" class="answer-input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" lang="en" placeholder="englisches Wort" data-enter="check">' +
         '<div class="row" style="margin-top:12px"><button class="btn secondary" data-act="dontknow">Weiß ich nicht</button><button class="btn" data-act="check">Prüfen</button></div></div>';
@@ -495,11 +610,18 @@
       } else h += (T.answer ? '<p class="center small" style="margin-bottom:0">Deine Antwort</p><div class="diff"><s>' + esc(T.answer) + '</s></div>' : '') + '<p class="center small" style="margin-bottom:0">Richtig ist</p><div class="solution">' + esc(v.en) + '</div>';
       if (g.kind === 'case') h += '<p class="center small">Namen, Wochentage, Monate und „I“ schreibt man im Englischen groß.</p>';
     }
-    h += speakBtns(v.en) + extrasHtml(v) + '</div>';
+    h += speakBtns(v.en) + extrasHtml(v) + focusTipsHtml(T, v) + '</div>';
     if (!T.writeOk && T.answer && !S.R.paper) h += '<button class="btn ghost" data-act="iwasright">🙋 Ich war richtig</button>';
     if (T.ui.reported) h += '<p class="small center">Gemeldet. Papa oder Mama schauen es sich an.</p>';
     h += '<button class="btn big" data-act="next">Weiter</button>';
     return h;
+  }
+  // Tipps zu Fehlerstelle und aktuellen Schwerpunkten (höchstens zwei)
+  function focusTipsHtml(T, v) {
+    const cats = [];
+    (T.errCats || []).forEach((c) => { if (!cats.includes(c)) cats.push(c); });
+    wordWeakCats(v, weakCats()).forEach((w) => { if (!cats.find((c) => c.id === w.cat.id)) cats.push(w.cat); });
+    return cats.slice(0, 2).map((c) => '<div class="tip">🎯 ' + esc(c.tip) + '</div>').join('');
   }
   function speakHtml(T, v) {
     const u = T.ui;
@@ -523,7 +645,7 @@
   }
   function repeatHtml(T, v) {
     const u = T.ui; u.tries = u.tries || 0;
-    let h = '<div class="card"><div class="prompt"><div class="label">Neues Wort: Hör zu und sprich nach.</div><div class="word">' + esc(v.en) + '</div><div class="meta">' + esc(deText(v)) + '</div></div>' + speakBtns(v.en);
+    let h = '<div class="card"><div class="prompt"><div class="label">' + (T.isNew ? 'Neues Wort: ' : '🎯 Aussprache üben: ') + 'Hör zu und sprich nach.</div><div class="word">' + esc(v.en) + '</div><div class="meta">' + esc(deText(v)) + '</div></div>' + speakBtns(v.en);
     if (speechOn() && !u.selfMode) {
       const fin = u.level === 'super' || u.tries >= 3;
       if (!fin) h += '<div class="center"><button class="mic' + (u.listening ? ' listening' : '') + '" data-act="listen-en" aria-label="Nachsprechen">🎤</button><p>' + (u.listening ? 'Ich höre zu …' : 'Tippe aufs Mikrofon und sprich nach.') + '</p></div>';
@@ -531,7 +653,7 @@
         const fb = { super: ['good', '🌟 Super verstanden!'], fast: ['warn', 'Fast, hör noch mal hin.'], nochmal: ['bad', 'Noch mal probieren.'] }[u.level];
         h += '<div class="card ' + fb[0] + ' center"><p class="feedback">' + fb[1] + '</p>' + (u.heard ? '<p class="small">Ich habe verstanden: „' + esc(u.heard) + '“</p>' : '') + '</div>';
       } else if (u.msg) h += '<p class="center">' + esc(u.msg) + '</p>';
-      if (u.tries >= 2 && u.level !== 'super') h += '<div class="tip">👄 ' + esc(v.checked && v.tip ? v.tip : 'Hör genau hin: Ich spreche es dir langsam vor. Achte auf jeden Laut.') + '</div>';
+      if (u.tries >= 2 && u.level !== 'super') h += '<div class="tip">👄 ' + esc(v.checked && v.tip ? v.tip : ((catsIn(normEn(v.en)).find((x) => x.cat.say && x.cat.id !== 'final') || {}).cat || { tip: 'Hör genau hin: Ich spreche es dir langsam vor. Achte auf jeden Laut.' }).tip) + '</div>';
       if (fin) h += '<p class="center small">' + (u.level === 'super' ? '' : 'Gut geübt! Wir machen weiter.') + '</p>';
       h += '</div>' + (fin ? '<button class="btn big" data-act="next">Weiter</button>' : '<button class="btn ghost" data-act="self-en">Ohne Mikrofon weiter</button>');
       return h;
@@ -544,7 +666,8 @@
     const ups = Object.entries(R.moves).filter(([, m]) => m.after > m.before);
     const mins = minutesToday();
     let h = '<div class="hero"><div class="cup">🎉</div><h1>Runde geschafft!</h1></div><div class="card"><p><b>' + R.firstOk + ' von ' + R.total + '</b> Wörter beim ersten Mal richtig geschrieben.</p>';
-    if (R.extra) h += '<p class="small">Extra-Übung: Die Lernkartei bleibt unverändert.</p>';
+    if (R.focusCat) h += '<p class="small">🎯 Schwerpunkt ' + esc((catById(R.focusCat) || {}).label || '') + ' geübt. Die Lernkartei bleibt unverändert.</p>';
+    else if (R.extra) h += '<p class="small">Extra-Übung: Die Lernkartei bleibt unverändert.</p>';
     else if (ups.length) h += '<p>' + ups.length + ' Wörter sind ein Fach weiter gekommen.</p>';
     h += '</div>';
     const rows = Object.entries(R.moves).map(([vid, m]) => { const v = vocabById(vid); return v ? '<li><span class="grow"><span class="en">' + esc(v.en) + '</span></span><span class="pill ' + (m.after > m.before ? 'good' : 'warn') + '">' + BOX_NAME[m.after] + '</span></li>' : ''; }).join('');
@@ -592,13 +715,14 @@
   // ---------- Elternbereich ----------
   function renderParent() {
     const nRev = openReports().length + D.vocab.filter(needsReview).length;
-    const tabs = [['vocab', 'Vokabeln'], ['import', 'Importieren'], ['review', 'Prüfen' + (nRev ? ' (' + nRev + ')' : '')], ['settings', 'Einstellungen'], ['backup', 'Sicherung']];
+    const tabs = [['vocab', 'Vokabeln'], ['import', 'Importieren'], ['review', 'Prüfen' + (nRev ? ' (' + nRev + ')' : '')], ['analysis', 'Auswertung'], ['settings', 'Einstellungen'], ['backup', 'Sicherung']];
     let h = '<div class="topbar"><button class="iconbtn" data-act="leave" aria-label="Elternbereich verlassen">←</button><h1>Elternbereich</h1></div>' +
       '<div class="tabs" role="tablist">' + tabs.map(([k, l]) => '<button role="tab" aria-selected="' + (S.tab === k) + '" data-act="tab" data-tab="' + k + '">' + esc(l) + '</button>').join('') + '</div>';
     if (backupDue() && S.tab !== 'backup') h += '<div class="card warn"><b>Erinnerung:</b> ' + (D.lastBackupAt ? 'Die letzte Sicherung ist über einen Monat her.' : 'Es gibt noch keine Sicherung.') + ' <button class="btn small" data-act="tab" data-tab="backup">Jetzt sichern</button></div>';
     if (S.tab === 'vocab') h += S.editId ? editHtml() : S.unitId ? unitHtml() : unitsHtml();
     if (S.tab === 'import') h += importHtml();
     if (S.tab === 'review') h += reviewHtml();
+    if (S.tab === 'analysis') h += analysisHtml();
     if (S.tab === 'settings') h += settingsHtml();
     if (S.tab === 'backup') h += backupHtml();
     app.innerHTML = h;
@@ -682,19 +806,33 @@
   }
   const COLS = ['unit', 'seite', 'englisch', 'deutsch', 'wortart', 'hinweis', 'beispiel_en', 'beispiel_de', 'aussprache'];
   const ALIAS = { aussprachetipp: 'aussprache', page: 'seite', english: 'englisch', german: 'deutsch', buch: 'buch' };
+  // Unit und Seite für Zeilen ohne eigene Angabe (Eintippen, Textdatei, Foto)
+  function importDefaults() {
+    const sel = S.impUnit || '';
+    const unit = sel === '__new' ? (S.impNewUnit || '').trim() : (unitById(sel) || {}).name || '';
+    return { unit, page: (S.impPage || '').trim() };
+  }
   function parseImport(text) {
-    const lines = text.replace(/\r/g, '').split('\n').filter((l) => l.trim());
+    const lines = text.replace(/\r/g, '').split('\n').filter((l) => l.trim() && !/^\s*#/.test(l));
     if (!lines.length) return [];
-    const delim = lines[0].includes('\t') ? '\t' : ';';
-    let map = COLS;
-    const first = splitLine(lines[0], delim).map((s) => s.toLowerCase().replace(/\s+/g, '_'));
+    const delim = lines[0].includes('\t') ? '\t' : lines.some((l) => l.includes(';')) ? ';' : null;
+    let map = null;
+    const first = delim ? splitLine(lines[0], delim).map((s) => s.toLowerCase().replace(/\s+/g, '_')) : [];
     if (first.includes('englisch') || first.includes('english')) { map = first.map((c) => ALIAS[c] || c); lines.shift(); }
+    const def = importDefaults();
     const book = bookById(S.bookId) || D.books[0];
     const seen = new Set();
     return lines.map((line, n) => {
-      const cells = splitLine(line, delim); const r = {};
-      map.forEach((k, i) => { r[k] = cells[i] || ''; });
-      const rec = { line: n + 1, bookName: r.buch || book.name, unit: r.unit, page: r.seite, en: normEn(r.englisch || ''), de: (r.deutsch || '').split('/').map((s) => s.trim()).filter(Boolean), pos: r.wortart, note: r.hinweis, exEn: r.beispiel_en, exDe: r.beispiel_de, tip: r.aussprache, errors: [] };
+      let cells = delim ? splitLine(line, delim) : [line.trim()];
+      let r = {};
+      if (map) map.forEach((k, i) => { r[k] = cells[i] || ''; });
+      else if (cells.length >= 4) COLS.forEach((k, i) => { r[k] = cells[i] || ''; });
+      else {
+        // Kurzform: „englisch = deutsch“, „englisch - deutsch“, „englisch ; deutsch ; hinweis“
+        if (cells.length === 1) { const m = cells[0].match(/^(.+?)\s*(?:=|\s[-–—:]\s)\s*(.+)$/); if (m) cells = [m[1].trim(), m[2].trim()]; }
+        r = { unit: def.unit, seite: def.page, englisch: cells[0] || '', deutsch: cells[1] || '', hinweis: cells[2] || '' };
+      }
+      const rec = { line: n + 1, bookName: r.buch || book.name, unit: r.unit || def.unit, page: r.seite || def.page, en: normEn(r.englisch || ''), de: (r.deutsch || '').split('/').map((s) => s.trim()).filter(Boolean), pos: r.wortart, note: r.hinweis, exEn: r.beispiel_en, exDe: r.beispiel_de, tip: r.aussprache, errors: [] };
       if (!rec.unit) rec.errors.push('Unit fehlt'); if (!rec.page) rec.errors.push('Seite fehlt');
       if (!rec.en) rec.errors.push('Englisch fehlt'); if (!rec.de.length) rec.errors.push('Deutsch fehlt');
       const key = (rec.bookName + '|' + rec.unit + '|' + rec.en).toLowerCase();
@@ -707,10 +845,19 @@
     });
   }
   function importHtml() {
-    let h = '<div class="card"><h3 style="margin-top:0">Liste einfügen</h3><p>Tabelle aus Excel kopieren oder Text im Importformat einfügen. Erste Zeile darf die Kopfzeile sein.</p>' +
-      '<details><summary><b>Importformat anzeigen</b></summary><pre style="white-space:pre-wrap;font-size:16px">unit;seite;englisch;deutsch;wortart;hinweis;beispiel_en;beispiel_de;aussprache\nUnit 1;12;breakfast;Frühstück;Nomen;;I have breakfast at 7.;Ich frühstücke um 7.;\nUnit 1;13;child;Kind;Nomen;Plural: children;;;</pre><p class="small">Trennzeichen Semikolon (aus Excel: Tabulator, geht automatisch). Mehrere Bedeutungen mit Schrägstrich. Die Spalte „aussprache“ ist optional.</p></details>' +
-      '<label for="imp">Vokabeln</label><textarea id="imp" placeholder="Hier einfügen …">' + esc(S.importText) + '</textarea>' +
-      '<div class="row" style="margin-top:10px"><button class="btn secondary" data-act="sample">20 Testwörter einsetzen</button><button class="btn" data-act="preview">Vorschau</button></div></div>';
+    const units = D.units.filter((u) => u.bookId === S.bookId).sort((a, b) => a.order - b.order);
+    if (S.impUnit === undefined) S.impUnit = units.length ? units[units.length - 1].id : '__new';
+    let h = '<div class="card"><h3 style="margin-top:0">1. Wohin gehören die Wörter?</h3>' +
+      '<label for="imp-unit">Unit</label><select id="imp-unit" data-change="impunit">' + units.map((u) => '<option value="' + u.id + '"' + (S.impUnit === u.id ? ' selected' : '') + '>' + esc(u.name) + '</option>').join('') + '<option value="__new"' + (S.impUnit === '__new' ? ' selected' : '') + '>+ Neue Unit …</option></select>' +
+      (S.impUnit === '__new' ? '<label for="imp-newunit">Name der neuen Unit</label><input type="text" id="imp-newunit" data-change="impnewunit" value="' + esc(S.impNewUnit || '') + '" placeholder="z. B. Unit 2">' : '') +
+      '<label for="imp-page">Seite</label><input type="text" id="imp-page" data-change="imppage" inputmode="numeric" value="' + esc(S.impPage || '') + '" placeholder="z. B. 14"></div>' +
+      '<div class="card"><h3 style="margin-top:0">2. Wörter hinzufügen</h3><p>Drei Wege, alle landen unten im Textfeld zum Prüfen:</p>' +
+      '<div class="row"><label class="btn" style="margin:0">📷 Foto der Vokabelseite<input type="file" accept="image/*" data-change="photo" hidden></label>' +
+      '<label class="btn secondary" style="margin:0">📄 Textdatei wählen<input type="file" accept=".txt,.csv,.tsv,text/plain,text/csv" data-change="textfile" hidden></label></div>' +
+      '<p id="ocrmsg" class="small">' + esc(S.ocrMsg || '') + '</p>' +
+      '<label for="imp">Oder eintippen bzw. einfügen – ein Wort pro Zeile:</label><textarea id="imp" placeholder="friend = Freund / Freundin\nbrother = Bruder\nto have breakfast = frühstücken">' + esc(S.importText) + '</textarea>' +
+      '<details><summary><b>Welche Schreibweisen gehen?</b></summary><ul class="small"><li><b>englisch = deutsch</b> (auch mit „ - “ oder „ : “ dazwischen)</li><li>Mehrere Bedeutungen mit Schrägstrich: <i>Freund / Freundin</i></li><li>Mit Hinweis: <i>child ; Kind ; Plural: children</i></li><li>Aus Excel kopiert (Spalten Englisch, Deutsch) oder im vollen Importformat mit Kopfzeile:<br><code>unit;seite;englisch;deutsch;wortart;hinweis;beispiel_en;beispiel_de;aussprache</code></li><li>Textdatei: dieselben Schreibweisen, gespeichert als .txt oder .csv (in Excel: „Speichern unter → CSV“)</li></ul></details>' +
+      '<div class="row" style="margin-top:10px"><button class="btn secondary" data-act="sample">20 Testwörter</button><button class="btn" data-act="preview">3. Vorschau</button></div></div>';
     if (S.preview) {
       const P = S.preview, ok = P.filter((r) => !r.errors.length), bad = P.length - ok.length;
       const nNew = ok.filter((r) => !r.existing).length, nUpd = ok.length - nNew;
@@ -722,12 +869,103 @@
         P.map((r) => '<tr' + (r.errors.length ? ' class="err"' : '') + '><td>' + r.line + '</td><td>' + esc(r.unit) + '</td><td>' + esc(r.page) + '</td><td>' + esc(r.en) + '</td><td>' + esc(r.de.join(' / ')) + '</td><td>' + (r.errors.length ? esc(r.errors.join(', ')) : r.existing ? 'aktualisieren' : 'neu') + '</td></tr>').join('') +
         '</tbody></table></div><div class="row" style="margin-top:12px"><button class="btn secondary" data-act="cancelimport">Verwerfen</button><button class="btn good" data-act="doimport"' + (ok.length ? '' : ' disabled') + '>' + ok.length + ' Wörter übernehmen</button></div></div>';
     }
-    h += '<div class="card"><h3 style="margin-top:0">Foto-Weg (außerhalb der App)</h3><ol><li>Vokabelseite im Buch fotografieren.</li><li>Foto in einem Claude-Chat hochladen, zusammen mit dem Text unten.</li><li>Ergebnis prüfen, kopieren und oben einfügen.</li></ol>' +
-      '<textarea readonly id="photoprompt" style="min-height:220px">' + esc(PHOTO_PROMPT) + '</textarea><button class="btn secondary" data-act="copyprompt" style="margin-top:10px">Text kopieren</button></div>';
+    h += '<div class="card"><details><summary><b>Genauer: Foto über einen Claude-Chat umwandeln</b></summary><p class="small">Die Fotoerkennung in der App arbeitet ohne Internet auf dem Gerät und braucht oft kleine Korrekturen. Bei schwierigen Seiten ist ein Claude-Chat genauer:</p><ol><li>Vokabelseite fotografieren.</li><li>Foto in einem Claude-Chat hochladen, zusammen mit dem Text unten.</li><li>Ergebnis prüfen, kopieren und oben einfügen.</li></ol>' +
+      '<textarea readonly id="photoprompt" style="min-height:220px">' + esc(PHOTO_PROMPT) + '</textarea><button class="btn secondary" data-act="copyprompt" style="margin-top:10px">Text kopieren</button></details></div>';
     return h;
   }
+  function addImportText(txt) {
+    const cur = ($('#imp') ? $('#imp').value : S.importText).trim();
+    S.importText = (cur ? cur + '\n' : '') + txt.trim();
+    S.preview = parseImport(S.importText);
+  }
+  function readTextFile(file) {
+    if ($('#imp')) syncImportFields();
+    const read = (enc) => new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsText(file, enc); });
+    read('utf-8').then((t) => (t.includes('�') ? read('windows-1252') : t)).then((t) => {
+      addImportText(t); S.ocrMsg = 'Datei „' + file.name + '“ eingelesen. Bitte die Vorschau prüfen.'; rerender();
+    });
+  }
+  // Fotoerkennung mit Tesseract (läuft auf dem Gerät, kein Upload, keine Kosten)
+  let tessLoad;
+  function loadTesseract() {
+    tessLoad = tessLoad || new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'vendor/tesseract/tesseract.min.js'; sc.onload = res; sc.onerror = () => { tessLoad = null; rej(new Error('load')); }; document.head.appendChild(sc); });
+    return tessLoad;
+  }
+  async function prepareImage(file) {
+    const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const scale = Math.min(1, 2400 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement('canvas'); c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+    const ctx = c.getContext('2d'); ctx.filter = 'grayscale(1) contrast(1.3)'; ctx.drawImage(bmp, 0, 0, c.width, c.height);
+    return c;
+  }
+  const isPhonetic = (t) => /[[\]ˈˌəɪʊæθðŋʃʒɜɔʌː]/.test(t);
+  // Zeilen in Spalten zerlegen: Englisch | Lautschrift | Deutsch | Hinweis.
+  // 1. Pro Zeile große Lücken finden, 2. Spaltenanfänge über alle Zeilen sammeln, 3. jedes Wort seiner Spalte zuordnen.
+  function ocrLinesToText(lines) {
+    const out = []; let page = '';
+    const rows = [];
+    for (const l of lines) {
+      const words = (l.words || []).filter((w) => w.text.trim()).map((w) => ({ text: w.text.replace(/^\|$/, 'I'), x0: w.bbox.x0, x1: w.bbox.x1, h: w.bbox.y1 - w.bbox.y0 }));
+      if (!words.length) continue;
+      // Kopfzeile mit Seitenzahl: Seite merken, Zeile nicht als Vokabel übernehmen
+      const pm = (l.text || '').match(/\b(?:page|seite|s\.)\s*(\d{1,3})\b/i);
+      if (pm) { if (!page) page = pm[1]; continue; }
+      rows.push(words);
+    }
+    const hs = rows.flat().map((w) => w.h).sort((a, b) => a - b);
+    const h = hs.length ? hs[Math.floor(hs.length / 2)] : 20;
+    const starts = [];
+    rows.forEach((ws) => { for (let i = 1; i < ws.length; i++) if (ws[i].x0 - ws[i - 1].x1 > Math.max(12, h * 1.2)) starts.push(ws[i].x0); });
+    starts.sort((a, b) => a - b);
+    const clusters = [];
+    starts.forEach((x) => { const c = clusters[clusters.length - 1]; if (c && x - c.max <= h) { c.max = x; c.n++; c.min = Math.min(c.min, x); } else clusters.push({ min: x, max: x, n: 1 }); });
+    const bounds = clusters.filter((c) => c.n >= 2 || rows.length < 4).map((c) => c.min - h / 2);
+    for (const ws of rows) {
+      const cols = [];
+      ws.forEach((w, i) => {
+        let k = bounds.filter((b) => w.x0 >= b).length;
+        if (i > 0 && w.x0 - ws[i - 1].x1 > Math.max(12, h * 1.2) && k <= ws[i - 1].col) k = ws[i - 1].col + 1;
+        w.col = k; (cols[k] = cols[k] || []).push(w.text);
+      });
+      const parts = cols.filter(Boolean).map((c) => c.join(' ').trim()).filter((t) => t && !isPhonetic(t) && !/^[|,.;:—–-]+$/.test(t));
+      if (parts.length < 2) continue;
+      out.push(parts[0] + ' ; ' + parts[1] + (parts.length > 2 ? ' ; ' + parts.slice(2).join(' ') : ''));
+    }
+    return { text: out.join('\n'), page };
+  }
+  async function runOcr(file) {
+    const setMsg = (m) => { S.ocrMsg = m; const el = $('#ocrmsg'); if (el) el.textContent = m; };
+    if ($('#imp')) syncImportFields();
+    try {
+      setMsg('Foto wird gelesen … (beim ersten Mal werden ca. 12 MB geladen)');
+      await loadTesseract();
+      const img = await prepareImage(file);
+      const w = await Tesseract.createWorker(['eng', 'deu'], 1, {
+        workerPath: 'vendor/tesseract/worker.min.js', corePath: 'vendor/tesseract/', langPath: 'vendor/tesseract/lang', workerBlobURL: false,
+        logger: (m) => { if (m.status === 'recognizing text') setMsg('Texterkennung … ' + Math.round(m.progress * 100) + ' %'); }
+      });
+      const { data } = await w.recognize(img);
+      await w.terminate();
+      const r = ocrLinesToText(data.lines || []);
+      if (!r.text) { setMsg('Auf dem Foto wurden keine Vokabeln erkannt. Tipp: gerade von oben, hell, nur eine Spalte pro Foto.'); return; }
+      if (r.page && !S.impPage) S.impPage = r.page;
+      addImportText(r.text);
+      setMsg(r.text.split('\n').length + ' Zeilen erkannt. Bitte jede Zeile mit dem Buch vergleichen und im Textfeld korrigieren, dann „Vorschau“.');
+      rerender();
+    } catch (e) {
+      console.error(e);
+      setMsg('Die Fotoerkennung hat nicht geklappt. Beim ersten Mal ist Internet nötig. Alternativ den Claude-Chat-Weg unten nutzen.');
+    }
+  }
+  function syncImportFields() {
+    S.importText = $('#imp').value;
+    if ($('#imp-page')) S.impPage = $('#imp-page').value;
+    if ($('#imp-newunit')) S.impNewUnit = $('#imp-newunit').value;
+  }
   function doImport() {
+    syncImportFields(); S.preview = parseImport(S.importText);
     const rows = S.preview.filter((r) => !r.errors.length);
+    if (!rows.length) return rerender();
     const status = $('#imp-status') ? $('#imp-status').value : 'aktuell';
     const checked = $('#imp-checked').checked;
     let lastUnit = null;
@@ -746,7 +984,7 @@
     }
     save();
     toast(rows.length + ' Wörter übernommen.');
-    S.preview = null; S.importText = ''; S.tab = 'vocab'; S.unitId = lastUnit ? lastUnit.id : null; S.bookId = lastUnit ? lastUnit.bookId : S.bookId;
+    S.preview = null; S.importText = ''; S.impUnit = lastUnit ? lastUnit.id : S.impUnit; S.impNewUnit = ''; S.tab = 'vocab'; S.unitId = lastUnit ? lastUnit.id : null; S.bookId = lastUnit ? lastUnit.bookId : S.bookId;
     render();
   }
 
@@ -784,6 +1022,34 @@
       }
     }
     save(); toast(yes ? 'Als richtig gewertet.' : 'Bleibt falsch.'); rerender();
+  }
+
+  // ---------- Auswertung ----------
+  const pct = (r) => (r === null ? '–' : Math.round(r * 100) + ' %');
+  function analysisHtml() {
+    const weak = weakCats();
+    let h = '<div class="card soft"><p style="margin-top:0"><b>So funktioniert es:</b> Die App merkt sich bei jedem Fehler, an welcher Stelle im Wort er passiert ist (z. B. beim „th“ oder bei der Großschreibung), und beim Nachsprechen, welche Laute nicht verstanden wurden. Fällt ein Bereich auf (ab 3 Versuchen, mindestens jede dritte Antwort falsch), wird er zum <b>Schwerpunkt</b>:</p>' +
+      '<ul><li>Bis zu 5 passende Wörter kommen zusätzlich in jede Lernrunde.</li><li>Auf Emmas Startseite erscheint eine kurze Schwerpunkt-Übung.</li><li>Bei passenden Wörtern zeigt die App den Tipp dazu.</li></ul><p class="small">Neuere Ergebnisse zählen mehr. Wird Emma besser, verschwindet der Schwerpunkt von selbst. Schwerpunkt-Übungen verändern die Lernkartei nicht.</p></div>';
+    h += '<div class="card"><h3 style="margin-top:0">Aktuelle Schwerpunkte</h3>' + (weak.length ? '<ul class="list">' + weak.map((w) => {
+      const ex = [].concat((D.skills[w.cat.id + ':write'] || {}).ex || [], (D.skills[w.cat.id + ':say'] || {}).ex || []).slice(0, 3);
+      return '<li><span class="grow"><span class="en">' + esc(w.cat.label) + '</span> ' + (w.manual ? '<span class="pill">von Ihnen gesetzt</span>' : '<span class="pill warn">automatisch erkannt</span>') +
+        (ex.length ? '<br><span class="de">Beispiele: ' + ex.map((e) => esc(e.en) + (e.answer ? ' → „' + esc(e.answer) + '“' : '')).join(' · ') + '</span>' : '') + '</span></li>';
+    }).join('') + '</ul>' : '<p class="muted">Zurzeit keine. Es braucht ein paar Lernrunden, bis Muster erkennbar sind.</p>') + '</div>';
+    h += '<div class="card"><h3 style="margin-top:0">Alle Bereiche</h3><p class="small">Fehlerquote beim Schreiben und Aussprechen. „Immer üben“ setzt einen Schwerpunkt auch ohne Auswertung (z. B. wenn die Lehrerin etwas angemerkt hat).</p><ul class="list">' +
+      allCats().map((c) => {
+        const w = skillRate(c.id + ':write'), sy = skillRate(c.id + ':say'), mode = (D.focusMode || {})[c.id] || 'auto';
+        const n = ((D.skills[c.id + ':write'] || {}).n || 0) + ((D.skills[c.id + ':say'] || {}).n || 0);
+        const bad = (w !== null && w >= WEAK) || (sy !== null && sy >= WEAK);
+        return '<li><span class="grow"><span class="en">' + esc(c.label) + '</span><br><span class="de">Schreiben ' + pct(w) + (c.say ? ' · Aussprechen ' + pct(sy) : '') + ' · ' + n + ' Versuche</span> ' + (bad ? '<span class="pill bad">auffällig</span>' : '') + '</span>' +
+          '<select data-change="focusmode" data-id="' + esc(c.id) + '" style="width:auto;min-height:44px"><option value="auto"' + (mode === 'auto' ? ' selected' : '') + '>Automatisch</option><option value="on"' + (mode === 'on' ? ' selected' : '') + '>Immer üben</option><option value="off"' + (mode === 'off' ? ' selected' : '') + '>Nicht üben</option></select>' +
+          (c.custom ? '<button class="iconbtn" data-act="delcat" data-id="' + esc(c.id) + '" aria-label="Entfernen">🗑️</button>' : '') + '</li>';
+      }).join('') + '</ul>' +
+      '<h3>Eigenen Schwerpunkt hinzufügen</h3><p class="small">Buchstaben oder Wörter, z. B. „I am“, „ch“ oder „-ing“. Die App übt dann alle Vokabeln, in denen das vorkommt.</p>' +
+      '<div class="row"><input type="text" id="newcat" placeholder="z. B. I am" style="flex:2 1 160px"><button class="btn secondary" data-act="addcat">+ Hinzufügen</button></div>' +
+      '<label for="newcattip">Tipp für Emma (optional)</label><input type="text" id="newcattip" placeholder="z. B. I am = ich bin, immer mit großem I"></div>';
+    const top = D.vocab.filter((v) => prog(v.id).wrong > 0).sort((a, b) => prog(b.id).wrong - prog(a.id).wrong || prog(a.id).right - prog(b.id).right).slice(0, 10);
+    h += '<div class="card"><h3 style="margin-top:0">Problemwörter (Top 10)</h3>' + (top.length ? '<ul class="list">' + top.map((v) => '<li><span class="grow"><span class="en">' + esc(v.en) + '</span> <span class="de">' + esc(deText(v)) + '</span></span><span class="pill bad">' + prog(v.id).wrong + '× falsch</span><span class="pill">' + BOX_NAME[prog(v.id).box] + '</span></li>').join('') + '</ul>' : '<p class="muted">Noch keine.</p>') + '</div>';
+    return h;
   }
 
   // ---------- Einstellungen ----------
@@ -860,6 +1126,7 @@
     install: async () => { if (!installEvt) return; installEvt.prompt(); try { await installEvt.userChoice; } catch (e) { /* */ } installEvt = null; render(); },
     start: () => startRound(false),
     extra: () => startRound(true),
+    focus: (el) => startRound(false, el.dataset.id),
     quit: () => { tick(); save(); S.R = null; S.view = 'home'; render(); toast('Runde beendet. Dein Fortschritt ist gespeichert.'); },
     say: (el) => speak(el.dataset.text, false),
     sayslow: (el) => speak(el.dataset.text, true),
@@ -897,6 +1164,7 @@
       const r = await listen('en-GB'); u.listening = false;
       if (r.error && !r.list.length) { u.msg = speechErrorText(r.error); if (['not-allowed', 'service-not-allowed', 'network', 'audio-capture'].includes(r.error)) u.selfMode = true; return render(); }
       u.tries++; u.heard = r.list[0]; u.level = matchEnSpeech(r.list, v); beep(u.level === 'super');
+      if (u.tries === 1) { trackSay(v, u.level === 'super', u.heard); save(); }
       render();
       if (u.tries === 2 && u.level !== 'super') setTimeout(() => speak(v.en, true), 400);
     },
@@ -933,7 +1201,7 @@
       save(); S.editId = null; toast('Gelöscht.'); render();
     },
     sample: () => { S.importText = SAMPLE_CSV; S.preview = null; rerender(); },
-    preview: () => { S.importText = $('#imp').value; S.preview = parseImport(S.importText); if (!S.preview.length) toast('Keine Zeilen gefunden.'); rerender(); },
+    preview: () => { syncImportFields(); S.preview = parseImport(S.importText); if (!S.preview.length) toast('Keine Zeilen gefunden.'); rerender(); },
     cancelimport: () => { S.preview = null; rerender(); },
     doimport: () => doImport(),
     copyprompt: async () => { try { await navigator.clipboard.writeText(PHOTO_PROMPT); toast('Kopiert.'); } catch (e) { $('#photoprompt').select(); toast('Bitte markierten Text kopieren.'); } },
@@ -952,7 +1220,13 @@
     export: () => doExport(),
     share: () => doShare(),
     restore: () => { if (confirm('Den aktuellen Stand auf diesem Gerät durch die Sicherung ersetzen?')) restore(); },
-    cancelrestore: () => { S.backupFile = null; rerender(); }
+    cancelrestore: () => { S.backupFile = null; rerender(); },
+    addcat: () => {
+      const text = normEn($('#newcat').value); if (!text) return;
+      if (allCats().some((c) => c.custom && c.label === '„' + text + '“')) return toast('Gibt es schon.');
+      const id = 'c' + uid(); D.customCats.push({ id, text, tip: $('#newcattip').value.trim() }); D.focusMode[id] = 'on'; save(); toast('Schwerpunkt hinzugefügt.'); rerender();
+    },
+    delcat: (el) => { D.customCats = D.customCats.filter((c) => c.id !== el.dataset.id); delete D.focusMode[el.dataset.id]; delete D.skills[el.dataset.id + ':write']; delete D.skills[el.dataset.id + ':say']; save(); rerender(); }
   };
   const CHANGE = {
     paper: (el) => { D.settings.paperChosen = el.checked; save(); },
@@ -964,7 +1238,13 @@
     paperallowed: (el) => { D.settings.paperAllowed = el.checked; save(); },
     sound: (el) => { D.settings.sound = el.checked; save(); },
     theme: (el) => { D.settings.theme = el.value; save(); applyTheme(); },
-    bfile: (el) => { if (el.files && el.files[0]) readBackup(el.files[0]); }
+    bfile: (el) => { if (el.files && el.files[0]) readBackup(el.files[0]); },
+    focusmode: (el) => { D.focusMode[el.dataset.id] = el.value; save(); rerender(); },
+    impunit: (el) => { S.importText = $('#imp').value; S.impUnit = el.value; S.preview = null; rerender(); },
+    impnewunit: (el) => { S.impNewUnit = el.value; },
+    imppage: (el) => { S.impPage = el.value; },
+    textfile: (el) => { if (el.files && el.files[0]) readTextFile(el.files[0]); el.value = ''; },
+    photo: (el) => { if (el.files && el.files[0]) runOcr(el.files[0]); el.value = ''; }
   };
   document.addEventListener('click', (e) => {
     const el = e.target.closest('[data-act]');
@@ -976,7 +1256,9 @@
     const el = e.target.closest('[data-enter]');
     if (el && ACT[el.dataset.enter]) { e.preventDefault(); ACT[el.dataset.enter](el, e); }
   });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) { tick(); save(); } else if (S.R) S.R.last = Date.now(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { if (S.R) { tick(); save(); } } else if (S.R) S.R.last = Date.now(); });
+  // App in einem zweiten Fenster geändert: neuesten Stand übernehmen statt ihn zu überschreiben
+  window.addEventListener('storage', (e) => { if (e.key === STORE_KEY && e.newValue && !S.R) { D = load(); applyTheme(); render(); } });
 
   // ---------- Updates (Service Worker) ----------
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
@@ -995,6 +1277,6 @@
   }
 
   // Für die automatischen Tests
-  window.__teacup = { gradeEn, matchDe, matchEnSpeech, data: () => D, version: APP_VERSION };
+  window.__teacup = { gradeEn, matchDe, matchEnSpeech, trackWrite, weakCats, catsIn, data: () => D, version: APP_VERSION };
   render();
 })();
