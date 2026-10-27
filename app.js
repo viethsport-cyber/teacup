@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '1.3.0';
+  const APP_VERSION = '1.3.1';
   const STORE_KEY = 'teacup-data';
   const SAFETY_KEY = 'teacup-data-tagessicherung';
   const SCHEMA = 1;
@@ -304,6 +304,12 @@
     const cands = enCandidates(v);
     if (!a) return { ok: false, kind: 'empty', target: cands[0] };
     for (const c of cands) if (caseOk(a, c)) return { ok: true, kind: 'ok', target: c };
+    // Kurz- statt Langform (oder umgekehrt) zählt als richtig, mit Hinweis auf die Form im Buch
+    const ax = expandEn(a);
+    for (const c of cands) if (ax !== a || expandEn(c) !== c) {
+      if (caseOk(ax, expandEn(c))) return { ok: true, kind: expandEn(c) !== c ? 'longform' : 'shortform', target: c };
+      if (ax.toLowerCase() === expandEn(c).toLowerCase()) return { ok: false, kind: 'case', target: c };
+    }
     const hasTo = /^to /i.test(a);
     const pref = cands.filter((c) => /^to /i.test(c) === hasTo);
     for (const c of cands) if (a.toLowerCase() === c.toLowerCase()) return { ok: false, kind: 'case', target: c };
@@ -361,6 +367,14 @@
   }
   // Beim Sprechen sind Kurz- und Langform gleich gut („what's“ = „what is“)
   const SHORT = [["i'm", 'i am'], ["you're", 'you are'], ["we're", 'we are'], ["they're", 'they are'], ["he's", 'he is'], ["she's", 'she is'], ["it's", 'it is'], ["what's", 'what is'], ["where's", 'where is'], ["that's", 'that is'], ["there's", 'there is'], ["don't", 'do not'], ["doesn't", 'does not'], ["isn't", 'is not'], ["aren't", 'are not'], ["can't", 'cannot'], ["i've", 'i have'], ["let's", 'let us']];
+  function expandEn(s) {
+    return s.split(' ').map((t) => {
+      const hit = SHORT.find(([k]) => k === t.toLowerCase());
+      if (!hit) return t;
+      // Groß-/Kleinschreibung des ersten Buchstabens bleibt wie getippt (wichtig für „I“)
+      return /^[A-Z]/.test(t) ? hit[1][0].toUpperCase() + hit[1].slice(1) : hit[1];
+    }).join(' ');
+  }
   const speechNorm = (s) => { let t = ' ' + cmpEn(s).toLowerCase().replace(/[^a-z' ]/g, '').replace(/\s+/g, ' ').trim() + ' '; SHORT.forEach(([k, l]) => { t = t.split(' ' + k + ' ').join(' ' + l + ' '); }); return t.replace(/^ to /, ' ').trim(); };
   function matchEnSpeech(heard, v) {
     const target = speechNorm(v.en);
@@ -666,7 +680,9 @@
     const g = T.grade || { kind: T.writeOk ? 'ok' : 'wrong', target: v.en };
     let h;
     if (T.writeOk) {
-      h = '<div class="card good pop"><p class="feedback">✓ ' + esc(pick(['Richtig!', 'Super!', 'Klasse!', 'Genau!'])) + '</p><div class="solution' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div>';
+      const formHint = g.kind === 'longform' ? 'Richtig! Im Buch steht die Kurzform – die solltest du dir merken:' : g.kind === 'shortform' ? 'Richtig! Im Buch steht die Langform:' : '';
+      if (formHint) h = '<div class="card good pop"><p class="feedback">✓ Richtig!</p><div class="tip">' + ic('bulb') + esc(formHint.replace('Richtig! ', '')) + '</div><div class="solution' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div>';
+      else h = '<div class="card good pop"><p class="feedback">✓ ' + esc(pick(['Richtig!', 'Super!', 'Klasse!', 'Genau!'])) + '</p><div class="solution' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div>';
     } else {
       const msg = {
         near: 'Fast! Nur ein Buchstabe ist anders. Schau dir die rote Stelle an.',
