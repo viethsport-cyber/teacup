@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '1.7.0';
+  const APP_VERSION = '1.8.0';
   const STORE_KEY = 'teacup-data';
   const SAFETY_KEY = 'teacup-data-tagessicherung';
   const SCHEMA = 1;
@@ -446,14 +446,16 @@
     for (const v of D.vocab) {
       const u = unitById(v.unitId); if (!u) continue;
       const p = prog(v.id);
-      if (v.homework) hw.push(v);
+      if (v.homework && p.seen && p.due <= t) hw.push(v);
+      else if (v.homework && !p.seen) fresh.push(v);
       else if (u.status === 'kommt') continue;
       else if (p.seen && p.due <= t) due.push(v);
       else if (!p.seen && u.status === 'aktuell') fresh.push(v);
     }
     due.sort((a, b) => prog(a.id).box - prog(b.id).box || (prog(a.id).due < prog(b.id).due ? -1 : 1));
     sortVocab(fresh); sortVocab(hw);
-    let newLeft = Math.max(0, NEW_PER_DAY - introducedToday() - hw.filter((v) => !prog(v.id).seen).length);
+    fresh.sort((a, b) => (b.homework ? 1 : 0) - (a.homework ? 1 : 0));
+    let newLeft = Math.max(0, NEW_PER_DAY - introducedToday());
     const freshPick = fresh.slice(0, newLeft);
     const list = [...hw, ...due, ...freshPick].slice(0, roundMax());
     // Schwerpunkt-Wörter zusätzlich (ändern die Lernkartei nicht), nur wenn ohnehin gelernt wird
@@ -468,6 +470,10 @@
     }
     return { list, focusIds, hw: hw.length, due: due.length, fresh: freshPick.length, freshWaiting: fresh.length };
   }
+  // „Neu“-markierte Vokabeln (früher „Hausaufgabe“)
+  const freshTagged = () => D.vocab.filter((v) => v.homework && unitById(v.unitId));
+  // Alle Vokabeln für Testvorbereitung: der Reihe nach, bis jedes Wort einmal dran war
+  const allPool = () => D.vocab.filter((v) => { const u = unitById(v.unitId); return u && u.status !== 'kommt'; });
   function recordWrite(vid, ok) {
     const p = prog(vid), t = today();
     const before = p.box;
@@ -477,7 +483,7 @@
     else { p.box = 1; p.wrong++; }
     p.due = addDays(t, INTERVAL[p.box]);
     p.last = t; p.lastOk = ok;
-    const v = vocabById(vid); if (ok && v && v.homework) v.homework = false;
+    const v = vocabById(vid); if (ok && v && v.homework && p.box >= 3) v.homework = false;
     save();
     return { before, after: p.box };
   }
@@ -587,19 +593,24 @@
     let main;
     if (!D.vocab.length) {
       main = '<div class="card soft center"><p><b>Noch keine Vokabeln da.</b></p><p>Die Wörter werden im Elternbereich (Zahnrad oben rechts) eingetragen.</p></div>';
-    } else if (P.list.length) {
-      const parts = [];
-      if (P.hw) parts.push(P.hw + ' Hausaufgabe');
-      if (P.due) parts.push(Math.min(P.due, roundMax()) + ' Wiederholung');
-      if (P.fresh) parts.push(P.fresh + ' neu');
-      if (P.focusIds.size) parts.push(P.focusIds.size + ' Schwerpunkt ' + ic('target'));
-      main = '<div class="card"><h2 style="margin-top:0">Heute dran: ' + P.list.length + ' Wörter</h2><p class="muted">' + esc(parts.join(' · ')) + '</p>' +
-        (D.settings.paperAllowed ? '<label class="check"><input type="checkbox" data-change="paper" ' + (D.settings.paperChosen ? 'checked' : '') + '> Ich schreibe auf Papier</label>' : '') +
-        '<button class="btn big" data-act="start">Lernrunde starten</button></div>';
     } else {
-      const seen = D.vocab.some((v) => prog(v.id).seen);
-      main = '<div class="card good center"><p class="feedback">Alles erledigt für heute! ' + ic('party') + '</p><p>Morgen geht es weiter.</p>' +
-        (seen ? '<button class="btn secondary" data-act="extra">Freiwillig üben</button><p class="small">Freiwilliges Üben ändert die Lernkartei nicht.</p>' : '') + '</div>';
+      // Emma wählt: Tagesplan (Mix), nur neue Vokabeln oder alle Vokabeln (Testvorbereitung)
+      const nFresh = freshTagged().length, nAll = allPool().length;
+      const cycleLeft = allPool().filter((v) => !(D.allCycle || []).includes(v.id)).length;
+      let h = '';
+      if (P.list.length) {
+        const parts = [];
+        if (P.hw) parts.push(P.hw + ' Wiederholung neue Vokabeln');
+        if (P.due) parts.push(Math.min(P.due, roundMax()) + ' Wiederholung');
+        if (P.fresh) parts.push(P.fresh + ' neu');
+        if (P.focusIds.size) parts.push(P.focusIds.size + ' Schwerpunkt');
+        h += '<h2 style="margin-top:0">Heute dran: ' + P.list.length + ' Wörter</h2><p class="muted">' + esc(parts.join(' · ')) + '</p>' +
+          '<button class="btn big" data-act="start">' + ic('book') + 'Mein Tagesplan</button>';
+      } else h += '<p class="feedback">Tagesplan erledigt! ' + ic('party') + '</p><p class="center">Du kannst trotzdem weiterüben:</p>';
+      if (nFresh) h += '<button class="btn big ' + (P.list.length ? 'secondary' : '') + '" data-act="startfresh" style="margin-top:10px">' + ic('star') + 'Nur neue Vokabeln · ' + nFresh + '</button>';
+      if (nAll) h += '<button class="btn big secondary" data-act="startall" style="margin-top:10px">' + ic('repeat') + 'Alle Vokabeln üben</button><p class="small center" style="margin-bottom:0">Für Tests: geht alle ' + nAll + ' Wörter durch (' + (cycleLeft ? 'noch ' + cycleLeft + ' offen' : 'alle geschafft, nächste Runde beginnt von vorn') + '). Ändert die Lernkartei nicht.</p>';
+      main = '<div class="card' + (P.list.length ? '' : ' good') + '">' + h +
+        (D.settings.paperAllowed ? '<label class="check" style="margin-top:8px"><input type="checkbox" data-change="paper" ' + (D.settings.paperChosen ? 'checked' : '') + '> Ich schreibe auf Papier</label>' : '') + '</div>';
     }
     app.innerHTML =
       '<div class="topbar"><h1>' + ic('cup') + 'Teacup</h1><button class="iconbtn" data-act="parent" aria-label="Elternbereich">' + ic('gear') + (dot ? '<span class="badge-dot"></span>' : '') + '</button></div>' +
@@ -620,9 +631,20 @@
   }
 
   // ---------- Lernrunde ----------
-  function startRound(extra, focusCat) {
-    let list, focusIds = new Set();
-    if (focusCat) {
+  function startRound(extra, focusCat, mode) {
+    let list, focusIds = new Set(), noBox = new Set();
+    const t = today();
+    if (mode === 'fresh') {
+      // Nur neue Vokabeln: ungelernte zuerst, dann heute noch nicht geübte, dann schwächere Fächer
+      list = freshTagged().sort((a, b) => (prog(a.id).seen ? 1 : 0) - (prog(b.id).seen ? 1 : 0) || (prog(a.id).last === t ? 1 : 0) - (prog(b.id).last === t ? 1 : 0) || prog(a.id).box - prog(b.id).box).slice(0, roundMax());
+      list.forEach((v) => { const p = prog(v.id); if (p.seen && p.due > t) noBox.add(v.id); });
+    } else if (mode === 'all') {
+      const pool = allPool(); const done = new Set(D.allCycle || []);
+      let open = pool.filter((v) => !done.has(v.id));
+      if (!open.length) { D.allCycle = []; open = pool; }
+      list = open.sort(() => Math.random() - 0.5).slice(0, roundMax());
+      list.forEach((v) => noBox.add(v.id));
+    } else if (focusCat) {
       list = catWords(focusCat).sort(() => Math.random() - 0.5).sort((a, b) => prog(b.id).wrong - prog(a.id).wrong).slice(0, 10);
       list.forEach((v) => focusIds.add(v.id));
       if (!list.length) return toast('Dazu gibt es noch keine gelernten Wörter.');
@@ -631,13 +653,14 @@
       list = list.sort(() => Math.random() - 0.5).slice(0, 10);
     } else { const P = plan(); list = P.list; focusIds = P.focusIds; }
     if (!list.length) return;
+    if (extra || focusCat) list.forEach((v) => noBox.add(v.id));
     const weak = weakCats();
     S.R = {
-      extra, focusCat: focusCat || null, paper: D.settings.paperAllowed && D.settings.paperChosen,
+      extra, mode: mode || (focusCat ? 'focus' : extra ? 'extra' : 'plan'), focusCat: focusCat || null, paper: D.settings.paperAllowed && D.settings.paperChosen,
       tasks: list.map((v) => {
         const wc = wordWeakCats(v, weak);
         const fc = focusCat ? catById(focusCat) : null;
-        return { vid: v.id, pass: 1, isNew: !prog(v.id).seen, focus: focusIds.has(v.id), sayFocus: focusIds.has(v.id) && ((fc && fc.say && speechOn()) || wc.some((w) => w.sayWeak)) };
+        return { vid: v.id, pass: 1, isNew: !prog(v.id).seen, noBox: noBox.has(v.id) || focusIds.has(v.id), focus: focusIds.has(v.id), sayFocus: focusIds.has(v.id) && ((fc && fc.say && speechOn()) || wc.some((w) => w.sayWeak)) };
       }),
       i: 0, part: 1, words: list.map((v) => v.id), total: list.length, doneWords: new Set(), done2: new Set(), firstOk2: 0, moves: {}, firstOk: 0, reported: new Set(), last: Date.now()
     };
@@ -695,9 +718,10 @@
     T.writeOk = ok; T.answer = answer; T.grade = grade;
     if (T.pass === 1) {
       if (ok) R.firstOk++;
-      if (!R.extra && !T.focus) R.moves[T.vid] = recordWrite(T.vid, ok);
+      if (!T.noBox) R.moves[T.vid] = recordWrite(T.vid, ok);
+      else if (R.mode === 'all') { D.allCycle = [...new Set([...(D.allCycle || []), T.vid])]; }
       if (!R.paper) { T.errCats = trackWrite(vocabById(T.vid), answer, grade); save(); }
-    } else if (ok) { const v = vocabById(T.vid); if (v && v.homework) { v.homework = false; save(); } }
+    }
     beep(ok);
     if (ok) setTimeout(() => confetti(14), 60);
   }
@@ -705,7 +729,7 @@
     const R = S.R, T = curTask();
     const done = R.part === 2 ? R.done2 : R.doneWords;
     const pct = Math.round((done.size / R.total) * 100);
-    const label = (R.part === 2 ? 'Teil 2 · ' : '') + (T.pass > 1 ? 'Noch einmal üben' : 'Wort ' + Math.min(R.total, R.i + 1) + ' von ' + R.total);
+    const label = (R.part === 2 ? 'Teil 2 · ' : R.mode === 'fresh' ? 'Neu · ' : R.mode === 'all' ? 'Alle · ' : '') + (T.pass > 1 ? 'Noch einmal üben' : 'Wort ' + Math.min(R.total, R.i + 1) + ' von ' + R.total);
     const mark = (T.focus && !R.focusCat) || R.focusCat ? ' ' + ic('target') : '';
     const steps = { write: ic('pencil') + 'Englisch schreiben', check: ic('check') + 'Kontrollieren', repeat: ic('repeat') + 'Nachsprechen', dewrite: ic('pencil') + 'Deutsch schreiben', decheck: ic('check') + 'Kontrollieren' };
     return '<div class="topbar"><button class="iconbtn" data-act="quit" aria-label="Runde beenden">' + ic('x') + '</button><h1 style="font-size:1.05rem">' + esc(label) + (R.extra ? ' · Extra' : '') + mark + '</h1><span class="pill">' + steps[T.phase] + '</span></div>' +
@@ -829,6 +853,8 @@
     let h = '<div class="hero-city small-city">' + SKYLINE + '<div class="hello"><b>Runde geschafft!</b><span>Well done!</span></div></div><div class="card"><p><b>' + R.firstOk + ' von ' + R.total + '</b> Wörter beim ersten Mal richtig geschrieben.</p>';
     if (R.done2.size) h += '<p><b>' + R.firstOk2 + ' von ' + R.words.length + '</b> beim ersten Mal richtig ins Deutsche übersetzt.</p>';
     if (R.focusCat) h += '<p class="small">' + ic('target') + 'Schwerpunkt ' + esc((catById(R.focusCat) || {}).label || '') + ' geübt. Die Lernkartei bleibt unverändert.</p>';
+    else if (R.mode === 'all') h += '<p class="small">Alle Vokabeln üben: noch ' + allPool().filter((v) => !(D.allCycle || []).includes(v.id)).length + ' Wörter offen. Die Lernkartei bleibt unverändert.</p>';
+    else if (R.mode === 'fresh') h += '<p class="small">Nur neue Vokabeln geübt.</p>';
     else if (R.extra) h += '<p class="small">Extra-Übung: Die Lernkartei bleibt unverändert.</p>';
     else if (ups.length) h += '<p>' + ups.length + ' Wörter sind ein Fach weiter gekommen.</p>';
     h += '</div>';
@@ -916,12 +942,13 @@
       '<label for="ust">Status</label><select id="ust" data-change="ustatus" data-id="' + u.id + '">' + Object.entries(STATUS).map(([k, l]) => '<option value="' + k + '"' + (u.status === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' +
       '<p class="small">Kommt noch = für Emma unsichtbar · Aktuell = neue Wörter werden eingeführt · Gelernt = nur Wiederholung nach Plan</p></div>';
     h += '<div class="card"><div class="row"><h3 style="margin:0;flex:1">' + words.length + ' Wörter</h3><button class="btn small" data-act="newword">+ Wort</button></div>' +
-      '<p class="small">' + ic('book') + '= als Hausaufgabe markieren (kommt in der nächsten Runde zuerst dran).</p><ul class="list">' +
+      '<p class="small">' + ic('star') + ' = als <b>neue Vokabel</b> markieren. Emma kann sie mit „Nur neue Vokabeln“ gezielt lernen. Die Markierung verschwindet von selbst, sobald das Wort sitzt (ab Fach 3).</p>' +
+      (words.some((v) => v.homework) ? '<button class="btn small secondary" data-act="clearfresh" data-id="' + u.id + '">Markierung „neu“ bei allen Wörtern dieser Unit entfernen</button>' : '') + '<ul class="list">' +
       words.map((v) => {
         const p = prog(v.id);
         return '<li><span class="grow"><span class="en">' + esc(v.en) + '</span><br><span class="de">' + esc(deText(v)) + (v.page ? ' · S. ' + esc(v.page) : '') + '</span><br>' +
-          '<span class="pill">' + (p.seen ? BOX_NAME[p.box] : 'neu') + '</span> ' + (v.homework ? '<span class="pill warn">Hausaufgabe</span> ' : '') + (needsReview(v) ? '<span class="pill bad">ungeprüft</span>' : '') + '</span>' +
-          '<button class="iconbtn" data-act="hw" data-id="' + v.id + '" aria-label="Hausaufgabe" aria-pressed="' + !!v.homework + '" style="' + (v.homework ? 'background:var(--warn-soft);border-color:var(--warn)' : '') + '">' + ic('book') + '</button>' +
+          '<span class="pill">' + (p.seen ? BOX_NAME[p.box] : 'noch nicht gelernt') + '</span> ' + (v.homework ? '<span class="pill warn">neu</span> ' : '') + (needsReview(v) ? '<span class="pill bad">ungeprüft</span>' : '') + '</span>' +
+          '<button class="iconbtn" data-act="hw" data-id="' + v.id + '" aria-label="Als neue Vokabel markieren" aria-pressed="' + !!v.homework + '" style="' + (v.homework ? 'background:var(--warn-soft);border-color:var(--warn)' : '') + '">' + ic('star') + '</button>' +
           '<button class="iconbtn" data-act="edit" data-id="' + v.id + '" aria-label="Bearbeiten">' + ic('pencil') + '</button></li>';
       }).join('') + '</ul></div>';
     h += '<div class="card"><button class="btn bad" data-act="delunit">Unit mit allen Wörtern löschen</button></div>';
@@ -1057,6 +1084,7 @@
       h += '<div class="card"><h3 style="margin-top:0">Vorschau</h3><p><b>' + nNew + '</b> neu · <b>' + nUpd + '</b> werden aktualisiert (Lernstand bleibt) · <b' + (bad ? ' style="color:var(--bad)"' : '') + '>' + bad + '</b> mit Fehler (werden übersprungen)' + (dup ? ' · <b>' + dup + '</b> doppelt' : '') + '</p>' +
         errorSummaryHtml(P) +
         (newUnits.length ? '<p>Neue Units: ' + esc(newUnits.join(', ')) + '</p><label for="imp-status">Status der neuen Units</label><select id="imp-status">' + Object.entries(STATUS).map(([k, l]) => '<option value="' + k + '"' + (k === 'aktuell' ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' : '') +
+        '<label class="check"><input type="checkbox" id="imp-tagnew" checked> Als <b>neue Vokabeln</b> markieren (Emma kann sie mit „Nur neue Vokabeln“ gezielt lernen)</label>' +
         (D.settings.autoApprove ? '<p class="small">Beispielsätze und Aussprachetipps sind sofort aktiv. Durchsehen und ändern: Reiter „Prüfen“.</p>' : '<label class="check"><input type="checkbox" id="imp-checked"> Beispielsätze und Aussprachetipps sind geprüft (sonst später unter „Prüfen“ freigeben)</label>') +
         '<div class="tablewrap"><table><thead><tr><th>#</th><th>Unit</th><th>S.</th><th>Englisch</th><th>Deutsch</th><th>Status</th></tr></thead><tbody>' +
         P.map((r) => '<tr' + (r.errors.length ? ' class="err"' : '') + '><td>' + r.line + '</td><td>' + esc(r.unit) + '</td><td>' + esc(r.page) + '</td><td>' + esc(r.en) + '</td><td>' + esc(r.de.join(' / ')) + '</td><td>' + (r.errors.length ? esc(r.errors.join(', ')) : r.dup ? 'doppelt, wird übersprungen' : r.existing ? 'aktualisieren' : 'neu') + '</td></tr>').join('') +
@@ -1166,6 +1194,7 @@
     if (!rows.length) return rerender();
     const status = $('#imp-status') ? $('#imp-status').value : 'aktuell';
     const auto = D.settings.autoApprove;
+    const tagNew = !$('#imp-tagnew') || $('#imp-tagnew').checked;
     const checked = auto || !!($('#imp-checked') && $('#imp-checked').checked);
     let lastUnit = null;
     for (const r of rows) {
@@ -1182,7 +1211,7 @@
         Object.entries(fields).forEach(([k, val]) => { if (['unitId', 'en', 'de'].includes(k) || (val && String(val).trim())) v[k] = val; });
         if (before !== [v.exEn, v.exDe, v.tip].join('|')) { v.checked = checked; v.reviewNew = auto; if (r.tip) v.tipAuto = false; }
       } else {
-        const nv = Object.assign({ id: uid(), createdAt: Date.now() + D.vocab.length, homework: false, altEn: [], checked }, fields);
+        const nv = Object.assign({ id: uid(), createdAt: Date.now() + D.vocab.length, homework: tagNew, altEn: [], checked }, fields);
         nv.reviewNew = auto && !!(r.exEn || r.exDe || r.tip);
         if (!nv.tip) { nv.tip = autoTip(nv.en); nv.tipAuto = !!nv.tip; }
         D.vocab.push(nv);
@@ -1250,7 +1279,6 @@
       // Lernstand korrigieren, wenn das Wort seitdem nicht erneut abgefragt wurde
       if (r.prevBox && p.last === r.day && !p.lastOk) {
         p.box = Math.min(r.prevBox + 1, 6); p.due = addDays(r.day, INTERVAL[p.box]); p.lastOk = true; p.wrong = Math.max(0, p.wrong - 1); p.right++;
-        if (v.homework) v.homework = false;
       }
     }
     save(); toast(yes ? 'Als richtig gewertet.' : 'Bleibt falsch.'); rerender();
@@ -1378,7 +1406,9 @@
     leave: () => { S.unlocked = false; S.view = 'home'; S.editId = null; render(); },
     install: async () => { if (!installEvt) return; installEvt.prompt(); try { await installEvt.userChoice; } catch (e) { /* */ } installEvt = null; render(); },
     start: () => startRound(false),
-    extra: () => startRound(true),
+    extra: () => startRound(false, null, 'all'),
+    startfresh: () => startRound(false, null, 'fresh'),
+    startall: () => startRound(false, null, 'all'),
     focus: (el) => startRound(false, el.dataset.id),
     quit: () => { tick(); save(); S.R = null; S.view = 'home'; render(); toast('Runde beendet. Dein Fortschritt ist gespeichert.'); },
     say: (el) => speak(el.dataset.text, false),
@@ -1451,6 +1481,7 @@
       D.reports = D.reports.filter((r) => vocabById(r.vid));
       save(); S.unitId = null; toast('Unit gelöscht.'); render();
     },
+    clearfresh: (el) => { D.vocab.forEach((v) => { if (v.unitId === el.dataset.id) v.homework = false; }); save(); rerender(); },
     hw: (el) => { const v = vocabById(el.dataset.id); v.homework = !v.homework; save(); rerender(); },
     edit: (el) => { S.editId = el.dataset.id; S.tab = 'vocab'; const v = vocabById(el.dataset.id); if (v) S.unitId = v.unitId; render(); },
     newword: () => { S.editId = 'new'; render(); },
