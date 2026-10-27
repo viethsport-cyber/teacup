@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '1.2.0';
+  const APP_VERSION = '1.3.0';
   const STORE_KEY = 'teacup-data';
   const SAFETY_KEY = 'teacup-data-tagessicherung';
   const SCHEMA = 1;
@@ -12,7 +12,7 @@
   const INTERVAL = { 1: 1, 2: 2, 3: 4, 4: 7, 5: 14, 6: 30 };
   const BOX_NAME = { 1: 'Fach 1', 2: 'Fach 2', 3: 'Fach 3', 4: 'Fach 4', 5: 'Fach 5', 6: 'Sitzt' };
   const STATUS = { kommt: 'Kommt noch', aktuell: 'Aktuell', gelernt: 'Gelernt' };
-  const POS = ['', 'Nomen', 'Verb', 'Adjektiv', 'Adverb', 'Präposition', 'Pronomen', 'Konjunktion', 'Zahlwort', 'Interjektion', 'Ausdruck'];
+  const POS = ['', 'Nomen', 'Verb', 'Adjektiv', 'Adverb', 'Präposition', 'Pronomen', 'Konjunktion', 'Zahlwort', 'Interjektion', 'Ausdruck', 'Redewendung', 'Satz'];
 
   // Feste Schwerpunkt-Bibliothek: typische Stolpersteine für deutschsprachige Kinder.
   // say = auch beim Aussprechen relevant
@@ -56,7 +56,7 @@
   ].join('\n');
 
   const PHOTO_PROMPT = 'Wandle die Vokabeln auf diesem Foto (Green Line 1, Klett) in folgendes Format um.\n' +
-    '- Eine Zeile pro Vokabel, Trennzeichen Semikolon.\n' +
+    '- Eine Zeile pro Vokabel, Satz oder Redewendung, Trennzeichen Semikolon. Satzzeichen (? ! .) wie im Buch übernehmen.\n' +
     '- Erste Zeile ist genau diese Kopfzeile: unit;seite;englisch;deutsch;wortart;hinweis;beispiel_en;beispiel_de;aussprache\n' +
     '- Unit: UNIT HIER EINTRAGEN (z. B. Unit 1). Seite wie im Buch.\n' +
     '- Englisch und Deutsch exakt wie im Buch übernehmen (britische Schreibweise, Groß-/Kleinschreibung wie im Buch).\n' +
@@ -278,21 +278,29 @@
     }
     return d[m][n];
   }
-  const normEn = (s) => String(s).replace(/[’‘`´]/g, "'").replace(/\s+/g, ' ').trim().replace(/[.!?]+$/, '');
+  // tidyEn: zum Speichern (Satzzeichen bleiben erhalten). normEn/cmpEn: zum Vergleichen.
+  const tidyEn = (s) => String(s).replace(/[’‘`´]/g, "'").replace(/\s+/g, ' ').trim();
+  const normEn = (s) => tidyEn(s).replace(/[.!?]+$/, '');
+  // Bei Sätzen und Redewendungen zählen nur die Wörter, nicht Komma, Punkt, Frage- oder Ausrufezeichen
+  const cmpEn = (s) => tidyEn(s).replace(/[,.!?;:"“”„«»…]/g, ' ').replace(/\s+-\s+/g, ' ').replace(/\s+/g, ' ').trim();
   const isVerb = (v) => /verb/i.test(v.pos || '') || (!v.pos && /^to /i.test(v.en));
   function enCandidates(v) {
-    const list = [v.en, ...(v.altEn || [])].map(normEn);
+    const list = [v.en, ...(v.altEn || [])].map(cmpEn);
     if (D.settings.toOptional && isVerb(v)) list.slice().forEach((c) => { if (/^to /i.test(c)) list.push(c.slice(3)); });
     return list;
   }
   // Groß-/Kleinschreibung zählt nur dort, wo die Lösung Großbuchstaben hat (Namen, Wochentage, Monate, „I“).
+  // Ausnahme: Der Satzanfang darf klein geschrieben werden (außer „I“), weil bei Sätzen nur die Wörter zählen.
   function caseOk(a, c) {
     const ta = a.split(' '), tc = c.split(' ');
     if (ta.length !== tc.length) return false;
-    return tc.every((t, i) => (/[A-ZÄÖÜ]/.test(t) ? ta[i] === t : ta[i].toLowerCase() === t.toLowerCase()));
+    return tc.every((t, i) => {
+      if (i === 0 && tc.length > 1 && !/^I($|')/.test(t)) return ta[i].toLowerCase() === t.toLowerCase();
+      return /[A-ZÄÖÜ]/.test(t) ? ta[i] === t : ta[i].toLowerCase() === t.toLowerCase();
+    });
   }
   function gradeEn(answer, v) {
-    const a = normEn(answer);
+    const a = cmpEn(answer);
     const cands = enCandidates(v);
     if (!a) return { ok: false, kind: 'empty', target: cands[0] };
     for (const c of cands) if (caseOk(a, c)) return { ok: true, kind: 'ok', target: c };
@@ -322,7 +330,7 @@
   }
   const ch = (c) => (c === ' ' ? '&nbsp;' : esc(c));
   function renderDiff(answer, target) {
-    const ops = diffOps(normEn(answer), target);
+    const ops = diffOps(cmpEn(answer), target);
     const mine = ops.map((o) => (o.t === 'm' ? '<span class="ok">' + ch(o.a) + '</span>' : o.t === 'd' ? '<span class="miss">&nbsp;</span>' : '<span class="err">' + ch(o.a) + '</span>')).join('');
     const sol = ops.filter((o) => o.t !== 'i').map((o) => (o.t === 'm' ? ch(o.b) : '<span class="miss">' + ch(o.b) + '</span>')).join('');
     return { mine, sol };
@@ -338,7 +346,7 @@
     out.delete('');
     return [...out];
   }
-  const tolerance = (len) => (len <= 3 ? 0 : len <= 7 ? 1 : 2);
+  const tolerance = (len) => (len <= 3 ? 0 : len <= 7 ? 1 : len <= 15 ? 2 : Math.round(len * 0.15));
   function matchDe(heard, v) {
     const vars = deVariants(v);
     for (const h of heard) {
@@ -351,11 +359,14 @@
     }
     return false;
   }
+  // Beim Sprechen sind Kurz- und Langform gleich gut („what's“ = „what is“)
+  const SHORT = [["i'm", 'i am'], ["you're", 'you are'], ["we're", 'we are'], ["they're", 'they are'], ["he's", 'he is'], ["she's", 'she is'], ["it's", 'it is'], ["what's", 'what is'], ["where's", 'where is'], ["that's", 'that is'], ["there's", 'there is'], ["don't", 'do not'], ["doesn't", 'does not'], ["isn't", 'is not'], ["aren't", 'are not'], ["can't", 'cannot'], ["i've", 'i have'], ["let's", 'let us']];
+  const speechNorm = (s) => { let t = ' ' + cmpEn(s).toLowerCase().replace(/[^a-z' ]/g, '').replace(/\s+/g, ' ').trim() + ' '; SHORT.forEach(([k, l]) => { t = t.split(' ' + k + ' ').join(' ' + l + ' '); }); return t.replace(/^ to /, ' ').trim(); };
   function matchEnSpeech(heard, v) {
-    const target = normEn(v.en).toLowerCase().replace(/^to /, '').replace(/[^a-z' ]/g, '');
+    const target = speechNorm(v.en);
     let best = 'nochmal';
     for (const h of heard) {
-      const hn = normEn(h).toLowerCase().replace(/^to /, '').replace(/[^a-z' ]/g, '').trim();
+      const hn = speechNorm(h);
       if (hn === target || (' ' + hn + ' ').includes(' ' + target + ' ')) return 'super';
       if (lev(hn, target) <= Math.max(1, Math.round(target.length * 0.34))) best = 'fast';
     }
@@ -441,7 +452,7 @@
   // Schriftliche Antwort auswerten. Gibt die Kategorien zurück, in denen der Fehler lag.
   function trackWrite(v, answer, grade) {
     if (!answer || !grade || grade.kind === 'empty') return [];
-    const target = grade.target, a = normEn(answer);
+    const target = grade.target, a = cmpEn(answer);
     // Völlig andere Antwort = Wort nicht gewusst, kein Rechtschreibmuster
     if (!grade.ok && grade.kind === 'wrong' && lev(a.toLowerCase(), target.toLowerCase()) > Math.ceil(target.length / 2)) return [];
     const errIdx = new Set();
@@ -628,7 +639,7 @@
     if (T.phase === 'write') {
       const fc = S.R.focusCat && catById(S.R.focusCat);
       if (fc && T.pass === 1 && S.R.i === 0) body += '<div class="tip">' + ic('target') + '<b>Dein Schwerpunkt:</b> ' + esc(fc.tip) + '</div>';
-      body += '<div class="card"><div class="prompt"><div class="label">Wie heißt das auf Englisch?</div><div class="word">' + esc(deText(v)) + '</div><div class="meta">' + esc(meta) + '</div></div>';
+      body += '<div class="card"><div class="prompt"><div class="label">Wie heißt das auf Englisch?</div><div class="word' + (deText(v).length > 24 ? ' long' : '') + '">' + esc(deText(v)) + '</div><div class="meta">' + esc(meta) + '</div></div>';
       if (S.R.paper) body += '<p class="center">Schreib das englische Wort auf dein Papier.</p><button class="btn big" data-act="reveal">Aufdecken</button></div>';
       else body += '<input type="text" id="ans" class="answer-input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" lang="en" placeholder="englisches Wort" data-enter="check">' +
         '<div class="row" style="margin-top:12px"><button class="btn secondary" data-act="dontknow">Weiß ich nicht</button><button class="btn" data-act="check">Prüfen</button></div></div>';
@@ -648,14 +659,14 @@
   }
   function checkHtml(T, v) {
     if (S.R.paper && T.writeOk === undefined) {
-      return '<div class="card"><div class="prompt"><div class="label">' + esc(deText(v)) + '</div><div class="solution">' + esc(v.en) + '</div></div>' + speakBtns(v.en) + extrasHtml(v) +
+      return '<div class="card"><div class="prompt"><div class="label">' + esc(deText(v)) + '</div><div class="solution' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div></div>' + speakBtns(v.en) + extrasHtml(v) +
         '<p class="center"><b>Hast du es richtig geschrieben?</b> Vergleiche jeden Buchstaben.</p>' +
         '<div class="row"><button class="btn bad" data-act="paper-no">✗ Nicht gewusst</button><button class="btn good" data-act="paper-yes">✓ Gewusst</button></div></div>';
     }
     const g = T.grade || { kind: T.writeOk ? 'ok' : 'wrong', target: v.en };
     let h;
     if (T.writeOk) {
-      h = '<div class="card good pop"><p class="feedback">✓ ' + esc(pick(['Richtig!', 'Super!', 'Klasse!', 'Genau!'])) + '</p><div class="solution">' + esc(v.en) + '</div>';
+      h = '<div class="card good pop"><p class="feedback">✓ ' + esc(pick(['Richtig!', 'Super!', 'Klasse!', 'Genau!'])) + '</p><div class="solution' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div>';
     } else {
       const msg = {
         near: 'Fast! Nur ein Buchstabe ist anders. Schau dir die rote Stelle an.',
@@ -665,10 +676,10 @@
         wrong: 'Noch nicht ganz. Schau dir die Lösung genau an.'
       }[g.kind] || '';
       h = '<div class="card bad shake"><p class="feedback">' + esc(msg) + '</p>';
-      if (T.answer && !S.R.paper && lev(normEn(T.answer).toLowerCase(), g.target.toLowerCase()) <= Math.ceil(g.target.length / 2)) {
+      if (T.answer && !S.R.paper && lev(cmpEn(T.answer).toLowerCase(), g.target.toLowerCase()) <= Math.ceil(g.target.length / 2)) {
         const d = renderDiff(T.answer, g.target);
         h += '<p class="center small" style="margin-bottom:0">Deine Antwort</p><div class="diff">' + d.mine + '</div><p class="center small" style="margin-bottom:0">Richtig ist</p><div class="diff">' + d.sol + '</div>';
-      } else h += (T.answer ? '<p class="center small" style="margin-bottom:0">Deine Antwort</p><div class="diff"><s>' + esc(T.answer) + '</s></div>' : '') + '<p class="center small" style="margin-bottom:0">Richtig ist</p><div class="solution">' + esc(v.en) + '</div>';
+      } else h += (T.answer ? '<p class="center small" style="margin-bottom:0">Deine Antwort</p><div class="diff"><s>' + esc(T.answer) + '</s></div>' : '') + '<p class="center small" style="margin-bottom:0">Richtig ist</p><div class="solution' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div>';
       if (g.kind === 'case') h += '<p class="center small">Namen, Wochentage, Monate und „I“ schreibt man im Englischen groß.</p>';
     }
     h += speakBtns(v.en) + extrasHtml(v) + focusTipsHtml(T, v) + '</div>';
@@ -686,7 +697,7 @@
   }
   function speakHtml(T, v) {
     const u = T.ui;
-    let h = '<div class="card"><div class="prompt"><div class="label">Was heißt das auf Deutsch? Sag es laut.</div><div class="word">' + esc(v.en) + '</div></div>';
+    let h = '<div class="card"><div class="prompt"><div class="label">Was heißt das auf Deutsch? Sag es laut.</div><div class="word' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div></div>';
     if (u.result === undefined) {
       if (speechOn() && !u.selfMode) {
         h += '<div class="center"><button class="mic' + (u.listening ? ' listening' : '') + '" data-act="listen-de" aria-label="Sprechen">' + ic('mic') + '</button><p>' + (u.listening ? 'Ich höre zu …' : esc(u.msg || 'Tippe aufs Mikrofon und sag die deutsche Bedeutung.')) + '</p></div>' +
@@ -694,19 +705,19 @@
       } else if (!u.revealed) {
         h += '<p class="center">Sag die deutsche Bedeutung laut. Dann deck auf.</p><button class="btn big" data-act="reveal-de">Aufdecken</button>';
       } else {
-        h += '<div class="solution">' + esc(deText(v)) + '</div><div class="row"><button class="btn bad" data-act="de-no">✗ Nicht gewusst</button><button class="btn good" data-act="de-yes">✓ Gewusst</button></div>';
+        h += '<div class="solution' + (deText(v).length > 24 ? ' long' : '') + '">' + esc(deText(v)) + '</div><div class="row"><button class="btn bad" data-act="de-no">✗ Nicht gewusst</button><button class="btn good" data-act="de-yes">✓ Gewusst</button></div>';
       }
       return h + '</div>';
     }
-    if (u.result) h = '<div class="card good"><p class="feedback">✓ Richtig!</p><div class="solution">' + esc(deText(v)) + '</div>';
-    else h = '<div class="card bad"><p class="feedback">Noch nicht ganz.</p>' + (u.heard ? '<p class="center small">Ich habe verstanden: „' + esc(u.heard) + '“</p>' : '') + '<p class="center small" style="margin-bottom:0">Richtig ist</p><div class="solution">' + esc(deText(v)) + '</div>';
+    if (u.result) h = '<div class="card good"><p class="feedback">✓ Richtig!</p><div class="solution' + (deText(v).length > 24 ? ' long' : '') + '">' + esc(deText(v)) + '</div>';
+    else h = '<div class="card bad"><p class="feedback">Noch nicht ganz.</p>' + (u.heard ? '<p class="center small">Ich habe verstanden: „' + esc(u.heard) + '“</p>' : '') + '<p class="center small" style="margin-bottom:0">Richtig ist</p><div class="solution' + (deText(v).length > 24 ? ' long' : '') + '">' + esc(deText(v)) + '</div>';
     h += '</div>';
     if (!u.result && u.heard) h += '<button class="btn ghost" data-act="de-right">' + ic('flag') + 'Ich war richtig</button>';
     return h + '<button class="btn big" data-act="next">Weiter</button>';
   }
   function repeatHtml(T, v) {
     const u = T.ui; u.tries = u.tries || 0;
-    let h = '<div class="card"><div class="prompt"><div class="label">' + (T.isNew ? 'Neues Wort: ' : ic('target') + 'Aussprache üben: ') + 'Hör zu und sprich nach.</div><div class="word">' + esc(v.en) + '</div><div class="meta">' + esc(deText(v)) + '</div></div>' + speakBtns(v.en);
+    let h = '<div class="card"><div class="prompt"><div class="label">' + (T.isNew ? 'Neues Wort: ' : ic('target') + 'Aussprache üben: ') + 'Hör zu und sprich nach.</div><div class="word' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div><div class="meta">' + esc(deText(v)) + '</div></div>' + speakBtns(v.en);
     if (speechOn() && !u.selfMode) {
       const fin = u.level === 'super' || u.tries >= 3;
       if (!fin) h += '<div class="center"><button class="mic' + (u.listening ? ' listening' : '') + '" data-act="listen-en" aria-label="Nachsprechen">' + ic('mic') + '</button><p>' + (u.listening ? 'Ich höre zu …' : 'Tippe aufs Mikrofon und sprich nach.') + '</p></div>';
@@ -844,7 +855,7 @@
   }
   function saveWord() {
     const g = (id) => ($('#' + id).value || '').trim();
-    const en = normEn(g('f-en')), de = g('f-de').split('/').map((s) => s.trim()).filter(Boolean);
+    const en = tidyEn(g('f-en')), de = g('f-de').split('/').map((s) => s.trim()).filter(Boolean);
     if (!g('f-unit') || !g('f-page') || !en || !de.length) { $('#fmsg').textContent = 'Bitte Unit, Seite, Englisch und Deutsch ausfüllen.'; return; }
     const isNew = S.editId === 'new';
     const v = isNew ? { id: uid(), createdAt: Date.now(), homework: false, altEn: [] } : vocabById(S.editId);
@@ -894,14 +905,14 @@
         if (cells.length === 1) { const m = cells[0].match(/^(.+?)\s*(?:=|\s[-–—:]\s)\s*(.+)$/); if (m) cells = [m[1].trim(), m[2].trim()]; }
         r = { unit: def.unit, seite: def.page, englisch: cells[0] || '', deutsch: cells[1] || '', hinweis: cells[2] || '' };
       }
-      const rec = { line: n + 1, bookName: r.buch || book.name, unit: r.unit || def.unit, page: r.seite || def.page, en: normEn(r.englisch || ''), de: (r.deutsch || '').split('/').map((s) => s.trim()).filter(Boolean), pos: r.wortart, note: r.hinweis, exEn: r.beispiel_en, exDe: r.beispiel_de, tip: r.aussprache, errors: [] };
+      const rec = { line: n + 1, bookName: r.buch || book.name, unit: r.unit || def.unit, page: r.seite || def.page, en: tidyEn(r.englisch || ''), de: (r.deutsch || '').split('/').map((s) => s.trim()).filter(Boolean), pos: r.wortart, note: r.hinweis, exEn: r.beispiel_en, exDe: r.beispiel_de, tip: r.aussprache, errors: [] };
       if (!rec.unit) rec.errors.push('Unit fehlt'); if (!rec.page) rec.errors.push('Seite fehlt');
       if (!rec.en) rec.errors.push('Englisch fehlt'); if (!rec.de.length) rec.errors.push('Deutsch fehlt');
-      const key = (rec.bookName + '|' + rec.unit + '|' + rec.en).toLowerCase();
-      if (rec.en && seen.has(key)) rec.errors.push('doppelt in der Liste'); seen.add(key);
+      const key = (rec.bookName + '|' + rec.unit + '|' + cmpEn(rec.en)).toLowerCase();
+      rec.dup = !!rec.en && seen.has(key); seen.add(key);
       const b = D.books.find((x) => x.name.toLowerCase() === rec.bookName.toLowerCase());
       const u = b && D.units.find((x) => x.bookId === b.id && x.name.toLowerCase() === (rec.unit || '').toLowerCase());
-      rec.existing = u ? D.vocab.find((v) => v.unitId === u.id && v.en.toLowerCase() === rec.en.toLowerCase()) : null;
+      rec.existing = u ? D.vocab.find((v) => v.unitId === u.id && cmpEn(v.en).toLowerCase() === cmpEn(rec.en).toLowerCase()) : null;
       rec.newUnit = !u;
       return rec;
     });
@@ -913,22 +924,22 @@
       '<label for="imp-unit">Unit</label><select id="imp-unit" data-change="impunit">' + units.map((u) => '<option value="' + u.id + '"' + (S.impUnit === u.id ? ' selected' : '') + '>' + esc(u.name) + '</option>').join('') + '<option value="__new"' + (S.impUnit === '__new' ? ' selected' : '') + '>+ Neue Unit …</option></select>' +
       (S.impUnit === '__new' ? '<label for="imp-newunit">Name der neuen Unit</label><input type="text" id="imp-newunit" data-change="impnewunit" value="' + esc(S.impNewUnit || '') + '" placeholder="z. B. Unit 2">' : '') +
       '<label for="imp-page">Seite</label><input type="text" id="imp-page" data-change="imppage" inputmode="numeric" value="' + esc(S.impPage || '') + '" placeholder="z. B. 14"></div>' +
-      '<div class="card"><h3 style="margin-top:0">2. Wörter hinzufügen</h3><p>Drei Wege, alle landen unten im Textfeld zum Prüfen:</p>' +
+      '<div class="card"><h3 style="margin-top:0">2. Wörter und Sätze hinzufügen</h3><p>Drei Wege, alle landen unten im Textfeld zum Prüfen:</p>' +
       '<div class="row"><label class="btn" style="margin:0">' + ic('camera') + 'Foto der Vokabelseite<input type="file" accept="image/*" data-change="photo" hidden></label>' +
       '<label class="btn secondary" style="margin:0">' + ic('file') + 'Textdatei wählen<input type="file" accept=".txt,.csv,.tsv,text/plain,text/csv" data-change="textfile" hidden></label></div>' +
       '<p id="ocrmsg" class="small">' + esc(S.ocrMsg || '') + '</p>' +
-      '<label for="imp">Oder eintippen bzw. einfügen – ein Wort pro Zeile:</label><textarea id="imp" placeholder="friend = Freund / Freundin\nbrother = Bruder\nto have breakfast = frühstücken">' + esc(S.importText) + '</textarea>' +
-      '<details><summary><b>Welche Schreibweisen gehen?</b></summary><ul class="small"><li><b>englisch = deutsch</b> (auch mit „ - “ oder „ : “ dazwischen)</li><li>Mehrere Bedeutungen mit Schrägstrich: <i>Freund / Freundin</i></li><li>Mit Hinweis: <i>child ; Kind ; Plural: children</i></li><li>Aus Excel kopiert (Spalten Englisch, Deutsch) oder im vollen Importformat mit Kopfzeile:<br><code>unit;seite;englisch;deutsch;wortart;hinweis;beispiel_en;beispiel_de;aussprache</code></li><li>Textdatei: dieselben Schreibweisen, gespeichert als .txt oder .csv (in Excel: „Speichern unter → CSV“)</li></ul></details>' +
+      '<label for="imp">Oder eintippen bzw. einfügen – ein Wort pro Zeile:</label><textarea id="imp" placeholder="friend = Freund / Freundin\nto have breakfast = frühstücken\nWhat\'s your name? = Wie heißt du?">' + esc(S.importText) + '</textarea>' +
+      '<details><summary><b>Welche Schreibweisen gehen?</b></summary><ul class="small"><li><b>englisch = deutsch</b> (auch mit „ - “ oder „ : “ dazwischen)</li><li>Sätze und Redewendungen genauso: <i>How are you? = Wie geht es dir?</i> (bei Sätzen am besten „=“ verwenden)</li><li>Mehrere Bedeutungen mit Schrägstrich: <i>Freund / Freundin</i></li><li>Mit Hinweis: <i>child ; Kind ; Plural: children</i></li><li>Aus Excel kopiert (Spalten Englisch, Deutsch) oder im vollen Importformat mit Kopfzeile:<br><code>unit;seite;englisch;deutsch;wortart;hinweis;beispiel_en;beispiel_de;aussprache</code></li><li>Textdatei: dieselben Schreibweisen, gespeichert als .txt oder .csv (in Excel: „Speichern unter → CSV“)</li></ul></details>' +
       '<div class="row" style="margin-top:10px"><button class="btn secondary" data-act="sample">20 Testwörter</button><button class="btn" data-act="preview">3. Vorschau</button></div></div>';
     if (S.preview) {
-      const P = S.preview, ok = P.filter((r) => !r.errors.length), bad = P.length - ok.length;
+      const P = S.preview, ok = P.filter((r) => !r.errors.length && !r.dup), bad = P.filter((r) => r.errors.length).length, dup = P.filter((r) => r.dup && !r.errors.length).length;
       const nNew = ok.filter((r) => !r.existing).length, nUpd = ok.length - nNew;
       const newUnits = [...new Set(ok.filter((r) => r.newUnit).map((r) => r.unit))];
-      h += '<div class="card"><h3 style="margin-top:0">Vorschau</h3><p><b>' + nNew + '</b> neu · <b>' + nUpd + '</b> werden aktualisiert (Lernstand bleibt) · <b' + (bad ? ' style="color:var(--bad)"' : '') + '>' + bad + '</b> mit Fehler (werden übersprungen)</p>' +
+      h += '<div class="card"><h3 style="margin-top:0">Vorschau</h3><p><b>' + nNew + '</b> neu · <b>' + nUpd + '</b> werden aktualisiert (Lernstand bleibt) · <b' + (bad ? ' style="color:var(--bad)"' : '') + '>' + bad + '</b> mit Fehler (werden übersprungen)' + (dup ? ' · <b>' + dup + '</b> doppelt' : '') + '</p>' +
         (newUnits.length ? '<p>Neue Units: ' + esc(newUnits.join(', ')) + '</p><label for="imp-status">Status der neuen Units</label><select id="imp-status">' + Object.entries(STATUS).map(([k, l]) => '<option value="' + k + '"' + (k === 'aktuell' ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' : '') +
         '<label class="check"><input type="checkbox" id="imp-checked"> Beispielsätze und Aussprachetipps sind geprüft (sonst später unter „Prüfen“ freigeben)</label>' +
         '<div class="tablewrap"><table><thead><tr><th>#</th><th>Unit</th><th>S.</th><th>Englisch</th><th>Deutsch</th><th>Status</th></tr></thead><tbody>' +
-        P.map((r) => '<tr' + (r.errors.length ? ' class="err"' : '') + '><td>' + r.line + '</td><td>' + esc(r.unit) + '</td><td>' + esc(r.page) + '</td><td>' + esc(r.en) + '</td><td>' + esc(r.de.join(' / ')) + '</td><td>' + (r.errors.length ? esc(r.errors.join(', ')) : r.existing ? 'aktualisieren' : 'neu') + '</td></tr>').join('') +
+        P.map((r) => '<tr' + (r.errors.length ? ' class="err"' : '') + '><td>' + r.line + '</td><td>' + esc(r.unit) + '</td><td>' + esc(r.page) + '</td><td>' + esc(r.en) + '</td><td>' + esc(r.de.join(' / ')) + '</td><td>' + (r.errors.length ? esc(r.errors.join(', ')) : r.dup ? 'doppelt, wird übersprungen' : r.existing ? 'aktualisieren' : 'neu') + '</td></tr>').join('') +
         '</tbody></table></div><div class="row" style="margin-top:12px"><button class="btn secondary" data-act="cancelimport">Verwerfen</button><button class="btn good" data-act="doimport"' + (ok.length ? '' : ' disabled') + '>' + ok.length + ' Wörter übernehmen</button></div></div>';
     }
     h += '<div class="card"><details><summary><b>Genauer: Foto über einen Claude-Chat umwandeln</b></summary><p class="small">Die Fotoerkennung in der App arbeitet ohne Internet auf dem Gerät und braucht oft kleine Korrekturen. Bei schwierigen Seiten ist ein Claude-Chat genauer:</p><ol><li>Vokabelseite fotografieren.</li><li>Foto in einem Claude-Chat hochladen, zusammen mit dem Text unten.</li><li>Ergebnis prüfen, kopieren und oben einfügen.</li></ol>' +
@@ -1026,7 +1037,7 @@
   }
   function doImport() {
     syncImportFields(); S.preview = parseImport(S.importText);
-    const rows = S.preview.filter((r) => !r.errors.length);
+    const rows = S.preview.filter((r) => !r.errors.length && !r.dup);
     if (!rows.length) return rerender();
     const status = $('#imp-status') ? $('#imp-status').value : 'aktuell';
     const checked = $('#imp-checked').checked;
@@ -1037,7 +1048,7 @@
       let u = D.units.find((x) => x.bookId === b.id && x.name.toLowerCase() === r.unit.toLowerCase());
       if (!u) { u = { id: uid(), bookId: b.id, name: r.unit, status, order: D.units.length ? Math.max(...D.units.map((x) => x.order)) + 1 : 1 }; D.units.push(u); }
       lastUnit = u;
-      let v = D.vocab.find((x) => x.unitId === u.id && x.en.toLowerCase() === r.en.toLowerCase());
+      let v = D.vocab.find((x) => x.unitId === u.id && cmpEn(x.en).toLowerCase() === cmpEn(r.en).toLowerCase());
       const fields = { unitId: u.id, page: r.page, en: r.en, de: r.de, pos: r.pos, note: r.note, exEn: r.exEn, exDe: r.exDe, tip: r.tip };
       if (v) {
         const extraChanged = v.exEn !== r.exEn || v.exDe !== r.exDe || v.tip !== r.tip;
