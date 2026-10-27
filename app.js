@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '1.4.1';
+  const APP_VERSION = '1.4.2';
   const STORE_KEY = 'teacup-data';
   const SAFETY_KEY = 'teacup-data-tagessicherung';
   const SCHEMA = 1;
@@ -11,6 +11,7 @@
   // Tage bis zur nächsten Abfrage je Fach (6 = „Sitzt“, Kontrolle nach 30 Tagen)
   const INTERVAL = { 1: 1, 2: 2, 3: 4, 4: 7, 5: 14, 6: 30 };
   const BOX_NAME = { 1: 'Fach 1', 2: 'Fach 2', 3: 'Fach 3', 4: 'Fach 4', 5: 'Fach 5', 6: 'Sitzt' };
+  const NO_UNIT = 'Sonstige Wörter';  // Sammel-Unit für Wörter ohne Buch-Zuordnung
   const STATUS = { kommt: 'Kommt noch', aktuell: 'Aktuell', gelernt: 'Gelernt' };
   const POS = ['', 'Nomen', 'Verb', 'Adjektiv', 'Adverb', 'Präposition', 'Pronomen', 'Konjunktion', 'Zahlwort', 'Interjektion', 'Ausdruck', 'Redewendung', 'Satz'];
 
@@ -854,7 +855,7 @@
       '<p class="small">' + ic('book') + '= als Hausaufgabe markieren (kommt in der nächsten Runde zuerst dran).</p><ul class="list">' +
       words.map((v) => {
         const p = prog(v.id);
-        return '<li><span class="grow"><span class="en">' + esc(v.en) + '</span><br><span class="de">' + esc(deText(v)) + ' · S. ' + esc(v.page) + '</span><br>' +
+        return '<li><span class="grow"><span class="en">' + esc(v.en) + '</span><br><span class="de">' + esc(deText(v)) + (v.page ? ' · S. ' + esc(v.page) : '') + '</span><br>' +
           '<span class="pill">' + (p.seen ? BOX_NAME[p.box] : 'neu') + '</span> ' + (v.homework ? '<span class="pill warn">Hausaufgabe</span> ' : '') + (needsReview(v) ? '<span class="pill bad">ungeprüft</span>' : '') + '</span>' +
           '<button class="iconbtn" data-act="hw" data-id="' + v.id + '" aria-label="Hausaufgabe" aria-pressed="' + !!v.homework + '" style="' + (v.homework ? 'background:var(--warn-soft);border-color:var(--warn)' : '') + '">' + ic('book') + '</button>' +
           '<button class="iconbtn" data-act="edit" data-id="' + v.id + '" aria-label="Bearbeiten">' + ic('pencil') + '</button></li>';
@@ -869,7 +870,7 @@
     const f = (id, label, val, ph) => '<label for="' + id + '">' + label + '</label><input type="text" id="' + id + '" value="' + esc(val) + '" placeholder="' + esc(ph || '') + '">';
     return '<div class="card"><button class="btn ghost" data-act="canceledit">← Zurück</button><h2 style="margin-top:4px">' + (isNew ? 'Neues Wort' : 'Wort bearbeiten') + '</h2>' +
       '<label for="f-unit">Unit *</label><select id="f-unit">' + D.units.sort((a, b) => a.order - b.order).map((u) => '<option value="' + u.id + '"' + (u.id === v.unitId ? ' selected' : '') + '>' + esc((bookById(u.bookId) || {}).name + ' – ' + u.name) + '</option>').join('') + '</select>' +
-      f('f-page', 'Seite *', v.page, 'z. B. 12') + f('f-en', 'Englisch *', v.en, 'z. B. to have breakfast') + f('f-de', 'Deutsch * (mehrere Bedeutungen mit / trennen)', deText(v), 'z. B. frühstücken') +
+      f('f-page', 'Seite (optional)', v.page, 'z. B. 12') + f('f-en', 'Englisch *', v.en, 'z. B. to have breakfast') + f('f-de', 'Deutsch * (mehrere Bedeutungen mit / trennen)', deText(v), 'z. B. frühstücken') +
       '<label for="f-pos">Wortart</label><select id="f-pos">' + POS.map((p) => '<option' + (p === (v.pos || '') ? ' selected' : '') + '>' + esc(p) + '</option>').join('') + (v.pos && !POS.includes(v.pos) ? '<option selected>' + esc(v.pos) + '</option>' : '') + '</select>' +
       f('f-note', 'Hinweis aus dem Buch', v.note, 'z. B. Plural: children') + '<h3>Zusatzinhalte</h3>' + f('f-exen', 'Beispielsatz Englisch', v.exEn) + f('f-exde', 'Beispielsatz Deutsch', v.exDe) + f('f-tip', 'Aussprachetipp', v.tip) +
       (v.altEn && v.altEn.length ? '<p class="small">Zusätzlich akzeptiert: ' + esc(v.altEn.join(', ')) + '</p>' : '') +
@@ -880,7 +881,7 @@
   function saveWord() {
     const g = (id) => ($('#' + id).value || '').trim();
     const en = tidyEn(g('f-en')), de = g('f-de').split('/').map((s) => s.trim()).filter(Boolean);
-    if (!g('f-unit') || !g('f-page') || !en || !de.length) { $('#fmsg').textContent = 'Bitte Unit, Seite, Englisch und Deutsch ausfüllen.'; return; }
+    if (!g('f-unit') || !en || !de.length) { $('#fmsg').textContent = 'Bitte Englisch und Deutsch ausfüllen.'; return; }
     const isNew = S.editId === 'new';
     const v = isNew ? { id: uid(), createdAt: Date.now(), homework: false, altEn: [] } : vocabById(S.editId);
     Object.assign(v, { unitId: g('f-unit'), page: g('f-page'), en, de, pos: g('f-pos'), note: g('f-note'), exEn: g('f-exen'), exDe: g('f-exde'), tip: g('f-tip'), checked: $('#f-checked').checked });
@@ -939,7 +940,8 @@
         r = { unit: def.unit, seite: def.page, englisch: cells[0] || '', deutsch: cells[1] || '', hinweis: cells[2] || '' };
       }
       const rec = { line: n + 1, bookName: r.buch || book.name, unit: r.unit || def.unit, page: r.seite || def.page, en: tidyEn(r.englisch || ''), de: (r.deutsch || '').split('/').map((s) => s.trim()).filter(Boolean), pos: r.wortart, note: r.hinweis, exEn: r.beispiel_en, exDe: r.beispiel_de, tip: r.aussprache, errors: [] };
-      if (!rec.unit) rec.errors.push('Unit fehlt'); if (!rec.page) rec.errors.push('Seite fehlt');
+      // Unit und Seite sind freiwillig: ohne Unit landet das Wort in „Sonstige Wörter“
+      if (!rec.unit) rec.unit = NO_UNIT;
       if (!rec.en) rec.errors.push('Englisch fehlt'); if (!rec.de.length) rec.errors.push('Deutsch fehlt');
       const key = (rec.bookName + '|' + rec.unit + '|' + cmpEn(rec.en)).toLowerCase();
       rec.dup = !!rec.en && seen.has(key); seen.add(key);
@@ -967,11 +969,11 @@
   }
   function importHtml() {
     const units = D.units.filter((u) => u.bookId === S.bookId).sort((a, b) => a.order - b.order);
-    if (S.impUnit === undefined) S.impUnit = units.length ? units[units.length - 1].id : '__new';
+    if (S.impUnit === undefined) S.impUnit = units.length ? units[units.length - 1].id : '';
     let h = '<div class="card"><h3 style="margin-top:0">1. Wohin gehören die Wörter?</h3>' +
-      '<label for="imp-unit">Unit</label><select id="imp-unit" data-change="impunit">' + units.map((u) => '<option value="' + u.id + '"' + (S.impUnit === u.id ? ' selected' : '') + '>' + esc(u.name) + '</option>').join('') + '<option value="__new"' + (S.impUnit === '__new' ? ' selected' : '') + '>+ Neue Unit …</option></select>' +
+      '<p class="small" style="margin-top:0">Beides ist freiwillig. Ohne Unit kommen die Wörter in „' + NO_UNIT + '“.</p><label for="imp-unit">Unit (optional)</label><select id="imp-unit" data-change="impunit"><option value=""' + (S.impUnit === '' ? ' selected' : '') + '>– ohne Unit –</option>' + units.filter((u) => u.name !== NO_UNIT).map((u) => '<option value="' + u.id + '"' + (S.impUnit === u.id ? ' selected' : '') + '>' + esc(u.name) + '</option>').join('') + '<option value="__new"' + (S.impUnit === '__new' ? ' selected' : '') + '>+ Neue Unit …</option></select>' +
       (S.impUnit === '__new' ? '<label for="imp-newunit">Name der neuen Unit</label><input type="text" id="imp-newunit" data-change="impnewunit" value="' + esc(S.impNewUnit || '') + '" placeholder="z. B. Unit 2">' : '') +
-      '<label for="imp-page">Seite</label><input type="text" id="imp-page" data-change="imppage" inputmode="numeric" value="' + esc(S.impPage || '') + '" placeholder="z. B. 14"></div>' +
+      '<label for="imp-page">Seite (optional)</label><input type="text" id="imp-page" data-change="imppage" inputmode="numeric" value="' + esc(S.impPage || '') + '" placeholder="z. B. 14"></div>' +
       '<div class="card"><h3 style="margin-top:0">2. Wörter und Sätze hinzufügen</h3><p>Drei Wege, alle landen unten im Textfeld zum Prüfen:</p>' +
       '<div class="row"><label class="btn" style="margin:0">' + ic('camera') + 'Foto der Vokabelseite<input type="file" accept="image/*" data-change="photo" hidden></label>' +
       '<label class="btn secondary" style="margin:0">' + ic('file') + 'Textdatei wählen<input type="file" accept=".txt,.csv,.tsv,text/plain,text/csv" data-change="textfile" hidden></label>' +

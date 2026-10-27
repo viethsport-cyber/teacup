@@ -1,7 +1,7 @@
 // Service Worker: macht die App offline nutzbar.
 // Wichtig: Der Lernstand liegt NICHT im Cache, sondern im Gerätespeicher (localStorage).
 // Ein Update tauscht nur die Programmdateien aus, die Daten bleiben unberührt.
-const VERSION = '1.4.1';
+const VERSION = '1.4.2';
 const CACHE = 'teacup-' + VERSION;
 // Große Zusatzdateien (Fotoerkennung) werden erst bei Bedarf geladen und dann dauerhaft gespeichert.
 const VENDOR = 'teacup-vendor-1';
