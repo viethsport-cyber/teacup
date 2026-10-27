@@ -2,11 +2,12 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '1.6.0';
+  const APP_VERSION = '1.7.0';
   const STORE_KEY = 'teacup-data';
   const SAFETY_KEY = 'teacup-data-tagessicherung';
   const SCHEMA = 1;
   const ROUND_MAX = 15;
+  const roundMax = () => Number(D.settings.roundSize) || ROUND_MAX;
   const NEW_PER_DAY = 10;
   // Tage bis zur nächsten Abfrage je Fach (6 = „Sitzt“, Kontrolle nach 30 Tagen)
   const INTERVAL = { 1: 1, 2: 2, 3: 4, 4: 7, 5: 14, 6: 30 };
@@ -106,7 +107,7 @@
       app: 'teacup', schema: SCHEMA, createdAt: new Date().toISOString(),
       books: [{ id: 'gl1', name: 'Green Line 1' }],
       units: [], vocab: [], progress: {}, reports: [],
-      settings: { nickname: '', dailyMinutes: 15, toOptional: true, speech: false, paperAllowed: true, paperChosen: false, autoApprove: true, voiceName: '', slowSpeed: 'sehr langsam', normalRate: 0.85, sound: true, theme: 'auto' },
+      settings: { nickname: '', dailyMinutes: 15, toOptional: true, speech: false, paperAllowed: true, paperChosen: false, autoApprove: true, roundSize: 15, voiceName: '', slowSpeed: 'sehr langsam', normalRate: 0.85, sound: true, theme: 'auto' },
       pin: null, stats: { days: {} }, newByDay: {}, lastBackupAt: null,
       skills: {}, focusMode: {}, customCats: []
     };
@@ -454,16 +455,16 @@
     sortVocab(fresh); sortVocab(hw);
     let newLeft = Math.max(0, NEW_PER_DAY - introducedToday() - hw.filter((v) => !prog(v.id).seen).length);
     const freshPick = fresh.slice(0, newLeft);
-    const list = [...hw, ...due, ...freshPick].slice(0, ROUND_MAX);
+    const list = [...hw, ...due, ...freshPick].slice(0, roundMax());
     // Schwerpunkt-Wörter zusätzlich (ändern die Lernkartei nicht), nur wenn ohnehin gelernt wird
     const focusIds = new Set();
     const weak = weakCats();
-    if (list.length && weak.length && list.length < ROUND_MAX) {
+    if (list.length && weak.length && list.length < roundMax()) {
       const inList = new Set(list.map((v) => v.id));
       const cand = [];
       weak.forEach((w) => catWords(w.cat.id).forEach((v) => { if (!inList.has(v.id) && !cand.includes(v)) cand.push(v); }));
       cand.sort((a, b) => prog(b.id).wrong - prog(a.id).wrong || prog(a.id).box - prog(b.id).box);
-      cand.slice(0, Math.min(5, ROUND_MAX - list.length)).forEach((v) => { list.push(v); focusIds.add(v.id); });
+      cand.slice(0, Math.min(5, roundMax() - list.length)).forEach((v) => { list.push(v); focusIds.add(v.id); });
     }
     return { list, focusIds, hw: hw.length, due: due.length, fresh: freshPick.length, freshWaiting: fresh.length };
   }
@@ -589,7 +590,7 @@
     } else if (P.list.length) {
       const parts = [];
       if (P.hw) parts.push(P.hw + ' Hausaufgabe');
-      if (P.due) parts.push(Math.min(P.due, ROUND_MAX) + ' Wiederholung');
+      if (P.due) parts.push(Math.min(P.due, roundMax()) + ' Wiederholung');
       if (P.fresh) parts.push(P.fresh + ' neu');
       if (P.focusIds.size) parts.push(P.focusIds.size + ' Schwerpunkt ' + ic('target'));
       main = '<div class="card"><h2 style="margin-top:0">Heute dran: ' + P.list.length + ' Wörter</h2><p class="muted">' + esc(parts.join(' · ')) + '</p>' +
@@ -638,7 +639,7 @@
         const fc = focusCat ? catById(focusCat) : null;
         return { vid: v.id, pass: 1, isNew: !prog(v.id).seen, focus: focusIds.has(v.id), sayFocus: focusIds.has(v.id) && ((fc && fc.say && speechOn()) || wc.some((w) => w.sayWeak)) };
       }),
-      i: 0, total: list.length, doneWords: new Set(), speakOk: {}, moves: {}, firstOk: 0, reported: new Set(), last: Date.now()
+      i: 0, part: 1, words: list.map((v) => v.id), total: list.length, doneWords: new Set(), done2: new Set(), firstOk2: 0, moves: {}, firstOk: 0, reported: new Set(), last: Date.now()
     };
     S.R.tasks.forEach((t) => (t.phase = 'write'));
     S.view = 'round'; render();
@@ -648,12 +649,12 @@
   function nextPhase() {
     tick();
     const T = curTask();
-    const order = ['write', 'check', 'speak', 'repeat'];
+    // Teil 1: Deutsch → Englisch schreiben, kontrollieren, (neue Wörter) nachsprechen. Teil 2: Englisch → Deutsch.
+    const order = S.R.part === 2 ? ['dewrite', 'decheck'] : ['write', 'check', 'repeat'];
     let idx = order.indexOf(T.phase) + 1;
     while (idx < order.length) {
       const ph = order[idx];
-      if (ph === 'speak' && !T.focus && (T.pass === 1 || !S.R.speakOk[T.vid])) break;
-      if (ph === 'repeat' && T.pass === 1 && (T.isNew || T.sayFocus)) break;
+      if (ph !== 'repeat' || (T.pass === 1 && (T.isNew || T.sayFocus))) break;
       idx++;
     }
     if (idx < order.length) { T.phase = order[idx]; T.ui = {}; save(); return render(); }
@@ -661,13 +662,33 @@
   }
   function finishTask() {
     const R = S.R, T = curTask();
-    if (T.speakOk === true) R.speakOk[T.vid] = true;
-    if (T.writeOk && (T.speakOk !== false)) R.doneWords.add(T.vid);
+    if (R.part === 2) {
+      if (T.deOk) R.done2.add(T.vid);
+      else R.tasks.push({ vid: T.vid, pass: T.pass + 1, phase: 'dewrite' });
+    } else if (T.writeOk) R.doneWords.add(T.vid);
     else R.tasks.push({ vid: T.vid, pass: T.pass + 1, isNew: false, focus: T.focus, phase: 'write' });
     R.i++;
     save();
-    if (R.i >= R.tasks.length) { addLearnTime(0); D.stats.days[today()].rounds++; save(); S.view = 'summary'; }
+    if (R.i >= R.tasks.length) {
+      // Nach Teil 1: Zwischenseite „andersrum?“ (nicht bei Schwerpunkt-Übungen)
+      if (R.part === 1 && !R.focusCat) { R.part = 'switch'; return render(); }
+      endRound();
+      return;
+    }
     render();
+  }
+  function endRound() { addLearnTime(0); D.stats.days[today()].rounds++; save(); S.view = 'summary'; render(); }
+  function startPart2() {
+    const R = S.R;
+    R.part = 2; R.i = 0; R.total = R.words.length;
+    R.tasks = R.words.filter((id) => vocabById(id)).map((vid) => ({ vid, pass: 1, phase: 'dewrite' }));
+    render();
+  }
+  function switchHtml() {
+    const R = S.R;
+    return '<div class="hero-city small-city">' + SKYLINE + '<div class="hello"><b>Teil 1 geschafft!</b><span>Deutsch → Englisch</span></div></div>' +
+      '<div class="card center"><p class="feedback">' + ic('repeat') + 'Jetzt andersrum?</p><p>Du siehst die ' + R.words.length + ' englischen Wörter und schreibst, was sie auf Deutsch heißen.</p>' +
+      '<button class="btn big" data-act="part2">Los geht\'s: Englisch → Deutsch</button><button class="btn ghost" data-act="part2skip" style="width:100%;margin-top:8px">Für diese Runde reicht\'s</button></div>';
   }
   function setWrite(ok, answer, grade) {
     const R = S.R, T = curTask();
@@ -682,17 +703,19 @@
   }
   function roundHeader() {
     const R = S.R, T = curTask();
-    const pct = Math.round((R.doneWords.size / R.total) * 100);
-    const label = T.pass > 1 ? 'Noch einmal üben' : 'Wort ' + Math.min(R.total, R.i + 1) + ' von ' + R.total;
+    const done = R.part === 2 ? R.done2 : R.doneWords;
+    const pct = Math.round((done.size / R.total) * 100);
+    const label = (R.part === 2 ? 'Teil 2 · ' : '') + (T.pass > 1 ? 'Noch einmal üben' : 'Wort ' + Math.min(R.total, R.i + 1) + ' von ' + R.total);
     const mark = (T.focus && !R.focusCat) || R.focusCat ? ' ' + ic('target') : '';
-    const steps = { write: ic('pencil') + 'Schreiben', check: ic('check') + 'Kontrollieren', speak: ic('speech') + 'Sprechen', repeat: ic('repeat') + 'Nachsprechen' };
+    const steps = { write: ic('pencil') + 'Englisch schreiben', check: ic('check') + 'Kontrollieren', repeat: ic('repeat') + 'Nachsprechen', dewrite: ic('pencil') + 'Deutsch schreiben', decheck: ic('check') + 'Kontrollieren' };
     return '<div class="topbar"><button class="iconbtn" data-act="quit" aria-label="Runde beenden">' + ic('x') + '</button><h1 style="font-size:1.05rem">' + esc(label) + (R.extra ? ' · Extra' : '') + mark + '</h1><span class="pill">' + steps[T.phase] + '</span></div>' +
-      '<div class="track"><div class="fill" style="width:' + pct + '%"></div><span class="bus" style="left:' + pct + '%">' + BUS + '</span></div><div class="steps"><span>' + R.doneWords.size + ' geschafft</span><span>' + R.total + ' Wörter</span></div>';
+      '<div class="track"><div class="fill" style="width:' + pct + '%"></div><span class="bus" style="left:' + pct + '%">' + BUS + '</span></div><div class="steps"><span>' + done.size + ' geschafft</span><span>' + R.total + ' Wörter</span></div>';
   }
   const speakBtns = (text) => '<div class="speak-row"><button class="btn secondary" data-act="say" data-text="' + esc(text) + '">' + ic('speaker') + 'Anhören</button><button class="btn secondary" data-act="sayslow" data-text="' + esc(text) + '">' + ic('snail') + 'Langsam</button></div>';
   function renderRound() {
+    if (S.R.part === 'switch') { app.innerHTML = switchHtml(); return; }
     const T = curTask(), v = vocabById(T.vid);
-    if (!v) { S.R.doneWords.add(T.vid); return finishTask(); }
+    if (!v) { (S.R.part === 2 ? S.R.done2 : S.R.doneWords).add(T.vid); T.writeOk = T.deOk = true; return finishTask(); }
     T.ui = T.ui || {};
     let body = '';
     const meta = [v.pos, unitById(v.unitId) ? unitById(v.unitId).name + (v.page ? ', S. ' + v.page : '') : ''].filter(Boolean).join(' · ');
@@ -704,8 +727,9 @@
       else body += '<input type="text" id="ans" class="answer-input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" lang="en" placeholder="englisches Wort" data-enter="check">' +
         '<div class="row" style="margin-top:12px"><button class="btn secondary" data-act="dontknow">Weiß ich nicht</button><button class="btn" data-act="check">Prüfen</button></div></div>';
     } else if (T.phase === 'check') body = checkHtml(T, v);
-    else if (T.phase === 'speak') body = speakHtml(T, v);
     else if (T.phase === 'repeat') body = repeatHtml(T, v);
+    else if (T.phase === 'dewrite') body = deWriteHtml(T, v);
+    else if (T.phase === 'decheck') body = deCheckHtml(T, v);
     app.innerHTML = roundHeader() + body;
     const inp = $('#ans'); if (inp) inp.focus();
     if (T.phase === 'check' && !T.ui.spoken) { T.ui.spoken = true; speak(v.en); }
@@ -757,26 +781,28 @@
     wordWeakCats(v, weakCats()).forEach((w) => { if (!cats.find((c) => c.id === w.cat.id)) cats.push(w.cat); });
     return cats.slice(0, 2).map((c) => '<div class="tip">' + ic('target') + esc(c.tip) + '</div>').join('');
   }
-  function speakHtml(T, v) {
+  // Teil 2: englisches Wort sehen, deutsche Bedeutung schreiben (oder einsprechen)
+  function deWriteHtml(T, v) {
     const u = T.ui;
-    let h = '<div class="card"><div class="prompt"><div class="label">Was heißt das auf Deutsch? Sag es laut.</div><div class="word' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div></div>';
-    if (u.result === undefined) {
-      if (speechOn() && !u.selfMode) {
-        h += '<div class="center"><button class="mic' + (u.listening ? ' listening' : '') + '" data-act="listen-de" aria-label="Sprechen">' + ic('mic') + '</button><p>' + (u.listening ? 'Ich höre zu …' : esc(u.msg || 'Tippe aufs Mikrofon und sag die deutsche Bedeutung.')) + '</p></div>' +
-          '<button class="btn ghost" data-act="self-de">Ohne Mikrofon weiter</button>';
-      } else if (!u.revealed) {
-        h += '<p class="center">Sag die deutsche Bedeutung laut. Dann deck auf.</p><button class="btn big" data-act="reveal-de">Aufdecken</button>';
-      } else {
-        h += '<div class="solution' + (deText(v).length > 24 ? ' long' : '') + '">' + esc(deText(v)) + '</div><div class="row"><button class="btn bad" data-act="de-no">✗ Nicht gewusst</button><button class="btn good" data-act="de-yes">✓ Gewusst</button></div>';
-      }
-      return h + '</div>';
+    let h = '<div class="card"><div class="prompt"><div class="label">Was heißt das auf Deutsch?</div><div class="word' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div></div>' + speakBtns(v.en);
+    if (S.R.paper) return h + '<p class="center">Schreib die deutsche Bedeutung auf dein Papier.</p><button class="btn big" data-act="dereveal">Aufdecken</button></div>';
+    h += '<input type="text" id="ans" class="answer-input" autocomplete="off" autocorrect="off" spellcheck="false" lang="de" placeholder="deutsches Wort" data-enter="decheck" value="' + esc(u.heard || '') + '">';
+    if (speechOn()) h += '<div class="center" style="margin-top:12px"><button class="mic' + (u.listening ? ' listening' : '') + '" data-act="listen-de" aria-label="Einsprechen" style="width:72px;height:72px">' + ic('mic') + '</button><p class="small">' + (u.listening ? 'Ich höre zu …' : esc(u.msg || 'Oder aufs Mikrofon tippen und sagen.')) + '</p></div>';
+    return h + '<div class="row" style="margin-top:12px"><button class="btn secondary" data-act="dedontknow">Weiß ich nicht</button><button class="btn" data-act="decheck">Prüfen</button></div></div>';
+  }
+  function deCheckHtml(T, v) {
+    const sol = '<div class="solution' + (deText(v).length > 24 ? ' long' : '') + '">' + esc(deText(v)) + '</div>';
+    if (S.R.paper && T.deOk === undefined) {
+      return '<div class="card"><div class="prompt"><div class="label">' + esc(v.en) + '</div>' + sol + '</div>' + extrasHtml(v) +
+        '<p class="center"><b>Hast du es gewusst?</b></p><div class="row"><button class="btn bad" data-act="depaper-no">✗ Nicht gewusst</button><button class="btn good" data-act="depaper-yes">✓ Gewusst</button></div></div>';
     }
-    if (u.result) h = '<div class="card good"><p class="feedback">✓ Richtig!</p><div class="solution' + (deText(v).length > 24 ? ' long' : '') + '">' + esc(deText(v)) + '</div>';
-    else h = '<div class="card bad"><p class="feedback">Noch nicht ganz.</p>' + (u.heard ? '<p class="center small">Ich habe verstanden: „' + esc(u.heard) + '“</p>' : '') + '<p class="center small" style="margin-bottom:0">Richtig ist</p><div class="solution' + (deText(v).length > 24 ? ' long' : '') + '">' + esc(deText(v)) + '</div>';
-    h += '</div>';
-    if (!u.result && u.heard) h += '<button class="btn ghost" data-act="de-right">' + ic('flag') + 'Ich war richtig</button>';
+    let h = T.deOk ? '<div class="card good pop"><p class="feedback">✓ ' + esc(pick(['Richtig!', 'Super!', 'Klasse!', 'Genau!'])) + '</p><p class="center small" style="margin:0">' + esc(v.en) + ' =</p>' + sol
+      : '<div class="card bad shake"><p class="feedback">' + (T.deAnswer ? 'Noch nicht ganz.' : 'Kein Problem, so lernst du es jetzt.') + '</p>' + (T.deAnswer ? '<p class="center small" style="margin-bottom:0">Deine Antwort</p><div class="diff"><s>' + esc(T.deAnswer) + '</s></div>' : '') + '<p class="center small" style="margin-bottom:0">' + esc(v.en) + ' heißt</p>' + sol;
+    h += extrasHtml(v) + '</div>';
+    if (!T.deOk && T.deAnswer) h += '<button class="btn ghost" data-act="de-right">' + ic('flag') + 'Ich war richtig</button>';
     return h + '<button class="btn big" data-act="next">Weiter</button>';
   }
+  function setDe(ok, answer) { const T = curTask(); T.deOk = ok; T.deAnswer = answer; if (T.pass === 1 && ok) S.R.firstOk2++; beep(ok); if (ok) setTimeout(() => confetti(14), 60); }
   function repeatHtml(T, v) {
     const u = T.ui; u.tries = u.tries || 0;
     let h = '<div class="card"><div class="prompt"><div class="label">' + (T.isNew ? 'Neues Wort: ' : ic('target') + 'Aussprache üben: ') + 'Hör zu und sprich nach.</div><div class="word' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div><div class="meta">' + esc(deText(v)) + '</div></div>' + speakBtns(v.en);
@@ -801,6 +827,7 @@
     const mins = minutesToday();
     setTimeout(() => confetti(40), 100);
     let h = '<div class="hero-city small-city">' + SKYLINE + '<div class="hello"><b>Runde geschafft!</b><span>Well done!</span></div></div><div class="card"><p><b>' + R.firstOk + ' von ' + R.total + '</b> Wörter beim ersten Mal richtig geschrieben.</p>';
+    if (R.done2.size) h += '<p><b>' + R.firstOk2 + ' von ' + R.words.length + '</b> beim ersten Mal richtig ins Deutsche übersetzt.</p>';
     if (R.focusCat) h += '<p class="small">' + ic('target') + 'Schwerpunkt ' + esc((catById(R.focusCat) || {}).label || '') + ' geübt. Die Lernkartei bleibt unverändert.</p>';
     else if (R.extra) h += '<p class="small">Extra-Übung: Die Lernkartei bleibt unverändert.</p>';
     else if (ups.length) h += '<p>' + ups.length + ' Wörter sind ein Fach weiter gekommen.</p>';
@@ -1261,6 +1288,8 @@
   function settingsHtml() {
     const s = D.settings, gb = gbVoice();
     return '<div class="card"><label for="s-nick">Spitzname (wird auf der Startseite angezeigt)</label><input type="text" id="s-nick" value="' + esc(s.nickname) + '" data-change="nick" maxlength="20">' +
+      '<label for="s-round">Wörter pro Runde</label><select id="s-round" data-change="roundsize">' + [5, 10, 15, 20].map((n) => '<option value="' + n + '"' + (Number(s.roundSize) === n ? ' selected' : '') + '>' + n + ' Wörter</option>').join('') + '</select>' +
+      '<p class="small">Jede Runde hat zwei Teile: erst Deutsch → Englisch, dann dieselben Wörter Englisch → Deutsch.</p>' +
       '<label for="s-min">Tagesziel</label><select id="s-min" data-change="minutes">' + [10, 12, 15, 20].map((m) => '<option value="' + m + '"' + (s.dailyMinutes === m ? ' selected' : '') + '>' + m + ' Minuten</option>').join('') + '</select>' +
       '<label class="check"><input type="checkbox" data-change="toopt" ' + (s.toOptional ? 'checked' : '') + '> Bei Verben ist „to“ freiwillig (z. B. „write“ statt „to write“ gilt als richtig)</label>' +
       '<label class="check"><input type="checkbox" data-change="paperallowed" ' + (s.paperAllowed ? 'checked' : '') + '> Papier-Variante anbieten (Emma schreibt auf Papier und bewertet selbst)</label>' +
@@ -1373,16 +1402,24 @@
       T.writeOk = true; T.ui.reported = true; save(); nextPhase();
     },
     'listen-de': async () => {
-      const T = curTask(), v = vocabById(T.vid); T.ui.listening = true; render();
+      const T = curTask(); T.ui.listening = true; T.ui.heard = $('#ans') ? $('#ans').value : ''; render();
       const r = await listen('de-DE'); T.ui.listening = false;
-      if (r.error && !r.list.length) { T.ui.msg = speechErrorText(r.error); if (['not-allowed', 'service-not-allowed', 'network', 'audio-capture'].includes(r.error)) T.ui.selfMode = true; return render(); }
-      T.ui.heard = r.list[0]; T.ui.result = matchDe(r.list, v); T.speakOk = T.ui.result; beep(T.ui.result); render();
+      if (r.error && !r.list.length) { T.ui.msg = speechErrorText(r.error); return render(); }
+      T.ui.heard = r.list[0]; T.ui.alts = r.list; render();
     },
-    'self-de': () => { curTask().ui.selfMode = true; render(); },
-    'reveal-de': () => { curTask().ui.revealed = true; render(); },
-    'de-yes': () => { const T = curTask(); T.speakOk = true; beep(true); nextPhase(); },
-    'de-no': () => { const T = curTask(); T.speakOk = false; beep(false); nextPhase(); },
-    'de-right': () => { const T = curTask(); T.speakOk = true; nextPhase(); },
+    decheck: () => {
+      const T = curTask(), v = vocabById(T.vid), val = ($('#ans').value || '').trim();
+      if (!val) { $('#ans').focus(); return; }
+      const alts = T.ui.alts && T.ui.heard === val ? T.ui.alts : [val];
+      setDe(matchDe(alts, v), val); T.phase = 'decheck'; T.ui = {}; tick(); render();
+    },
+    dedontknow: () => { const T = curTask(); setDe(false, ''); T.phase = 'decheck'; T.ui = {}; tick(); render(); },
+    dereveal: () => { const T = curTask(); T.phase = 'decheck'; T.ui = {}; tick(); render(); },
+    'depaper-yes': () => { setDe(true, ''); nextPhase(); },
+    'depaper-no': () => { setDe(false, ''); nextPhase(); },
+    'de-right': () => { const T = curTask(); T.deOk = true; nextPhase(); },
+    part2: () => startPart2(),
+    part2skip: () => endRound(),
     'listen-en': async () => {
       const T = curTask(), v = vocabById(T.vid), u = T.ui; u.listening = true; u.level = ''; render();
       const r = await listen('en-GB'); u.listening = false;
@@ -1487,6 +1524,7 @@
     impunit: (el) => { S.importText = $('#imp').value; S.impUnit = el.value; S.preview = null; rerender(); },
     impnewunit: (el) => { S.impNewUnit = el.value; },
     imppage: (el) => { S.impPage = el.value; },
+    roundsize: (el) => { D.settings.roundSize = Number(el.value); save(); },
     slowspeed: (el) => { D.settings.slowSpeed = el.value; save(); },
     normalrate: (el) => { D.settings.normalRate = Number(el.value); save(); },
     enrunit: (el) => { S.enrichUnit = el.value; rerender(); },
