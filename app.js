@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '1.4.2';
+  const APP_VERSION = '1.5.0';
   const STORE_KEY = 'teacup-data';
   const SAFETY_KEY = 'teacup-data-tagessicherung';
   const SCHEMA = 1;
@@ -19,7 +19,7 @@
   // say = auch beim Aussprechen relevant
   const CATS = [
     { id: 'th', label: '„th“', re: /th/gi, say: true, tip: '„th“: Zungenspitze leicht zwischen die Zähne. Geschrieben immer t + h.' },
-    { id: 'w', label: '„w“', re: /\bw(?!r)/gi, say: true, tip: '„w“: Lippen rund wie beim Pusten, nicht wie das deutsche „w“.' },
+    { id: 'w', label: '„w“', re: /\bw(?!r|ho)/gi, say: true, tip: '„w“: Lippen rund wie beim Pusten, nicht wie das deutsche „w“.' },
     { id: 'v', label: '„v“', re: /v/gi, say: true, tip: '„v“: Oberzähne auf die Unterlippe, wie das deutsche „w“.' },
     { id: 'silent', label: 'stumme Buchstaben', re: /\bkn|\bwr|mb\b|igh|ight|alk|\bhour|\bhonest/gi, say: true, tip: 'Manche Buchstaben schreibt man, spricht sie aber nicht: knife, write, night.' },
     { id: 'final', label: 'weiches Wortende (b, d, g)', re: /[bdg]\b/gi, say: true, tip: 'Wortende weich sprechen: „dog“, nicht „dok“. Geschrieben mit b, d oder g.' },
@@ -31,6 +31,24 @@
     { id: 'apos', label: 'Apostroph und Kurzformen', re: /'/g, tip: 'Der Apostroph ersetzt Buchstaben: I\'m = I am, don\'t = do not.' },
     { id: 'be', label: '„I am“, „you are“, „he is“', re: /\b(am|are|is|i'm|you're|he's|she's|it's|we're|they're)\b/gi, tip: 'I am · you are · he/she/it is · we are · they are' }
   ];
+
+  // Aussprachetipp automatisch aus der festen Tipp-Bibliothek (ohne Internet, ohne KI)
+  function autoTip(en) {
+    const tips = [];
+    for (const id of ['th', 'w', 'v', 'silent', 'final']) {
+      const c = CATS.find((x) => x.id === id); c.re.lastIndex = 0;
+      if (c.re.test(String(en))) tips.push(c.tip);
+    }
+    return tips.slice(0, 2).join(' ');
+  }
+  const ENRICH_HEAD = 'Ergänze für die folgenden englischen Vokabeln (Green Line 1, Klasse 5, britisches Englisch):\n' +
+    '- beispiel_en: einen kurzen, einfachen Beispielsatz (höchstens 8 Wörter, nur Wortschatz der 5. Klasse, britische Schreibweise), in dem die Vokabel genau so vorkommt\n' +
+    '- beispiel_de: die deutsche Übersetzung des Satzes\n' +
+    '- aussprache: einen kurzen Aussprachetipp für deutschsprachige Kinder, nur wenn es eine echte Stolperfalle gibt, sonst leer\n' +
+    '- wortart: falls leer, ergänzen (Nomen, Verb, Adjektiv, Adverb, Ausdruck, Satz …)\n' +
+    'Die Spalten unit, seite, englisch, deutsch und hinweis NICHT verändern. Keine Semikolons innerhalb der Felder.\n' +
+    'Gib alle Zeilen in einem Codeblock aus, mit genau dieser Kopfzeile:\n' +
+    'unit;seite;englisch;deutsch;wortart;hinweis;beispiel_en;beispiel_de;aussprache\n\nVokabeln:\n';
 
   const SAMPLE_CSV = [
     'unit;seite;englisch;deutsch;wortart;hinweis;beispiel_en;beispiel_de;aussprache',
@@ -88,7 +106,7 @@
       app: 'teacup', schema: SCHEMA, createdAt: new Date().toISOString(),
       books: [{ id: 'gl1', name: 'Green Line 1' }],
       units: [], vocab: [], progress: {}, reports: [],
-      settings: { nickname: '', dailyMinutes: 15, toOptional: true, speech: false, paperAllowed: true, paperChosen: false, sound: true, theme: 'auto' },
+      settings: { nickname: '', dailyMinutes: 15, toOptional: true, speech: false, paperAllowed: true, paperChosen: false, autoApprove: true, sound: true, theme: 'auto' },
       pin: null, stats: { days: {} }, newByDay: {}, lastBackupAt: null,
       skills: {}, focusMode: {}, customCats: []
     };
@@ -812,7 +830,7 @@
 
   // ---------- Elternbereich ----------
   function renderParent() {
-    const nRev = openReports().length + D.vocab.filter(needsReview).length;
+    const nRev = openReports().length + D.vocab.filter((v) => needsReview(v) || v.reviewNew).length;
     const tabs = [['vocab', 'Vokabeln'], ['import', 'Importieren'], ['review', 'Prüfen' + (nRev ? ' (' + nRev + ')' : '')], ['analysis', 'Auswertung'], ['settings', 'Einstellungen'], ['backup', 'Sicherung']];
     let h = '<div class="topbar"><button class="iconbtn" data-act="leave" aria-label="Elternbereich verlassen">' + ic('back') + '</button><h1>Elternbereich</h1></div>' +
       '<div class="tabs" role="tablist">' + tabs.map(([k, l]) => '<button role="tab" aria-selected="' + (S.tab === k) + '" data-act="tab" data-tab="' + k + '">' + esc(l) + '</button>').join('') + '</div>';
@@ -885,6 +903,8 @@
     const isNew = S.editId === 'new';
     const v = isNew ? { id: uid(), createdAt: Date.now(), homework: false, altEn: [] } : vocabById(S.editId);
     Object.assign(v, { unitId: g('f-unit'), page: g('f-page'), en, de, pos: g('f-pos'), note: g('f-note'), exEn: g('f-exen'), exDe: g('f-exde'), tip: g('f-tip'), checked: $('#f-checked').checked });
+    if (isNew && !v.tip) { v.tip = autoTip(en); v.tipAuto = !!v.tip; }
+    v.reviewNew = false;
     if (isNew) D.vocab.push(v);
     save(); S.unitId = v.unitId; S.editId = null; toast('Gespeichert.'); render();
   }
@@ -991,7 +1011,7 @@
       h += '<div class="card"><h3 style="margin-top:0">Vorschau</h3><p><b>' + nNew + '</b> neu · <b>' + nUpd + '</b> werden aktualisiert (Lernstand bleibt) · <b' + (bad ? ' style="color:var(--bad)"' : '') + '>' + bad + '</b> mit Fehler (werden übersprungen)' + (dup ? ' · <b>' + dup + '</b> doppelt' : '') + '</p>' +
         errorSummaryHtml(P) +
         (newUnits.length ? '<p>Neue Units: ' + esc(newUnits.join(', ')) + '</p><label for="imp-status">Status der neuen Units</label><select id="imp-status">' + Object.entries(STATUS).map(([k, l]) => '<option value="' + k + '"' + (k === 'aktuell' ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' : '') +
-        '<label class="check"><input type="checkbox" id="imp-checked"> Beispielsätze und Aussprachetipps sind geprüft (sonst später unter „Prüfen“ freigeben)</label>' +
+        (D.settings.autoApprove ? '<p class="small">Beispielsätze und Aussprachetipps sind sofort aktiv. Durchsehen und ändern: Reiter „Prüfen“.</p>' : '<label class="check"><input type="checkbox" id="imp-checked"> Beispielsätze und Aussprachetipps sind geprüft (sonst später unter „Prüfen“ freigeben)</label>') +
         '<div class="tablewrap"><table><thead><tr><th>#</th><th>Unit</th><th>S.</th><th>Englisch</th><th>Deutsch</th><th>Status</th></tr></thead><tbody>' +
         P.map((r) => '<tr' + (r.errors.length ? ' class="err"' : '') + '><td>' + r.line + '</td><td>' + esc(r.unit) + '</td><td>' + esc(r.page) + '</td><td>' + esc(r.en) + '</td><td>' + esc(r.de.join(' / ')) + '</td><td>' + (r.errors.length ? esc(r.errors.join(', ')) : r.dup ? 'doppelt, wird übersprungen' : r.existing ? 'aktualisieren' : 'neu') + '</td></tr>').join('') +
         '</tbody></table></div><div class="row" style="margin-top:12px"><button class="btn secondary" data-act="cancelimport">Verwerfen</button><button class="btn good" data-act="doimport"' + (ok.length ? '' : ' disabled') + '>' + ok.length + ' Wörter übernehmen</button></div></div>';
@@ -1099,7 +1119,8 @@
     const rows = S.preview.filter((r) => !r.errors.length && !r.dup);
     if (!rows.length) return rerender();
     const status = $('#imp-status') ? $('#imp-status').value : 'aktuell';
-    const checked = $('#imp-checked').checked;
+    const auto = D.settings.autoApprove;
+    const checked = auto || !!($('#imp-checked') && $('#imp-checked').checked);
     let lastUnit = null;
     for (const r of rows) {
       let b = D.books.find((x) => x.name.toLowerCase() === r.bookName.toLowerCase());
@@ -1110,9 +1131,16 @@
       let v = D.vocab.find((x) => x.unitId === u.id && cmpEn(x.en).toLowerCase() === cmpEn(r.en).toLowerCase());
       const fields = { unitId: u.id, page: r.page, en: r.en, de: r.de, pos: r.pos, note: r.note, exEn: r.exEn, exDe: r.exDe, tip: r.tip };
       if (v) {
-        const extraChanged = v.exEn !== r.exEn || v.exDe !== r.exDe || v.tip !== r.tip;
-        Object.assign(v, fields); if (extraChanged) v.checked = checked;
-      } else D.vocab.push(Object.assign({ id: uid(), createdAt: Date.now() + D.vocab.length, homework: false, altEn: [], checked }, fields));
+        // Vorhandenes Wort ergänzen: leere Felder im Import überschreiben nichts, der Lernstand bleibt
+        const before = [v.exEn, v.exDe, v.tip].join('|');
+        Object.entries(fields).forEach(([k, val]) => { if (['unitId', 'en', 'de'].includes(k) || (val && String(val).trim())) v[k] = val; });
+        if (before !== [v.exEn, v.exDe, v.tip].join('|')) { v.checked = checked; v.reviewNew = auto; if (r.tip) v.tipAuto = false; }
+      } else {
+        const nv = Object.assign({ id: uid(), createdAt: Date.now() + D.vocab.length, homework: false, altEn: [], checked }, fields);
+        nv.reviewNew = auto && !!(r.exEn || r.exDe || r.tip);
+        if (!nv.tip) { nv.tip = autoTip(nv.en); nv.tipAuto = !!nv.tip; }
+        D.vocab.push(nv);
+      }
     }
     save();
     toast(rows.length + ' Wörter übernommen.');
@@ -1131,14 +1159,40 @@
         '<label class="check"><input type="checkbox" id="acc-' + r.id + '"> Diese Schreibweise künftig als richtig akzeptieren</label>' +
         '<div class="row"><button class="btn secondary" data-act="rep-no" data-id="' + r.id + '">Bleibt falsch</button><button class="btn good" data-act="rep-yes" data-id="' + r.id + '">Als richtig werten</button></div></div>';
     }).join('') + '</div>';
+    h += enrichHtml();
+    const fresh = D.vocab.filter((v) => v.reviewNew && !needsReview(v));
+    h += '<div class="card"><h3 style="margin-top:0">' + ic('check') + 'Zum Durchsehen (schon aktiv)</h3><p class="small">Neu ergänzte Beispielsätze und Tipps. Emma sieht sie bereits. Bei Bedarf mit ✏️ korrigieren.</p>';
+    if (!fresh.length) h += '<p class="muted">Nichts Neues.</p>';
+    else h += '<button class="btn secondary small" data-act="seenall">Alle ' + fresh.length + ' als durchgesehen markieren</button>';
+    h += '<ul class="list">' + fresh.slice(0, 100).map((v) => '<li><span class="grow"><span class="en">' + esc(v.en) + '</span> <span class="de">(' + esc(deText(v)) + ')</span>' +
+      (v.exEn || v.exDe ? '<br>Beispiel: <i>' + esc(v.exEn) + '</i> – ' + esc(v.exDe) : '') + (v.tip ? '<br>Aussprache: ' + esc(v.tip) : '') + '</span>' +
+      '<button class="btn small secondary" data-act="seen" data-id="' + v.id + '">Passt</button><button class="iconbtn" data-act="edit" data-id="' + v.id + '" aria-label="Bearbeiten">' + ic('pencil') + '</button></li>').join('') + '</ul></div>';
     const list = D.vocab.filter(needsReview);
-    h += '<div class="card"><h3 style="margin-top:0">Zusatzinhalte freigeben</h3><p class="small">Beispielsätze und Aussprachetipps sieht Emma erst nach Ihrer Freigabe.</p>';
-    if (!list.length) h += '<p class="muted">Alles geprüft.</p>';
-    else h += '<button class="btn secondary small" data-act="approveall">Alle ' + list.length + ' freigeben</button>';
+    if (!list.length) return h;
+    h += '<div class="card"><h3 style="margin-top:0">Zusatzinhalte freigeben</h3><p class="small">Diese Beispielsätze und Aussprachetipps sieht Emma erst nach Ihrer Freigabe.</p>';
+    h += '<button class="btn secondary small" data-act="approveall">Alle ' + list.length + ' freigeben</button>';
     h += '<ul class="list">' + list.map((v) => '<li><span class="grow"><span class="en">' + esc(v.en) + '</span> <span class="de">(' + esc(deText(v)) + ')</span>' +
       (v.exEn || v.exDe ? '<br>Beispiel: <i>' + esc(v.exEn) + '</i> – ' + esc(v.exDe) : '') + (v.tip ? '<br>Aussprache: ' + esc(v.tip) : '') + '</span>' +
       '<button class="btn small good" data-act="approve" data-id="' + v.id + '">Freigeben</button><button class="iconbtn" data-act="edit" data-id="' + v.id + '" aria-label="Bearbeiten">' + ic('pencil') + '</button></li>').join('') + '</ul></div>';
     return h;
+  }
+  // Beispielsätze über einen Claude-Chat ergänzen (kein Schlüssel, keine Kosten)
+  function enrichWords() {
+    return sortVocab(D.vocab.filter((v) => !v.exEn && (!S.enrichUnit || v.unitId === S.enrichUnit))).slice(0, 60);
+  }
+  function enrichText() {
+    const clean = (t) => String(t || '').replace(/;/g, ',');
+    return ENRICH_HEAD + enrichWords().map((v) => [(unitById(v.unitId) || {}).name, v.page, v.en, deText(v), v.pos, v.note].map(clean).join(';')).join('\n');
+  }
+  function enrichHtml() {
+    const words = enrichWords();
+    const total = D.vocab.filter((v) => !v.exEn && (!S.enrichUnit || v.unitId === S.enrichUnit)).length;
+    return '<div class="card"><h3 style="margin-top:0">' + ic('bulb') + 'Beispielsätze mit Claude ergänzen</h3>' +
+      '<p class="small">Aussprachetipps setzt die App automatisch. Beispielsätze schreibt ein Claude-Chat, je Durchgang bis zu 60 Wörter.</p>' +
+      '<label for="enr-unit">Für welche Wörter?</label><select id="enr-unit" data-change="enrunit"><option value="">Alle Units</option>' +
+      D.units.slice().sort((a, b) => a.order - b.order).map((u) => '<option value="' + u.id + '"' + (S.enrichUnit === u.id ? ' selected' : '') + '>' + esc(u.name) + '</option>').join('') + '</select>' +
+      '<p><b>' + total + '</b> Wörter ohne Beispielsatz' + (total > 60 ? ' (dieser Durchgang: 60)' : '') + '.</p>' +
+      (words.length ? '<ol><li><button class="btn small" data-act="copyenrich">' + ic('share') + 'Text für Claude kopieren</button></li><li>In einem Claude-Chat einfügen und senden.</li><li>Claudes Antwort kopieren (Kopieren-Knopf am Codeblock).</li><li><button class="btn small secondary" data-act="pasteenrich">' + ic('clip') + 'Ergebnis übernehmen</button> → Vorschau prüfen → Übernehmen.</li></ol>' : '<p class="muted">Alle Wörter haben einen Beispielsatz.</p>') + '</div>';
   }
   function decideReport(id, yes) {
     const r = D.reports.find((x) => x.id === id); if (!r) return;
@@ -1191,6 +1245,7 @@
       '<label for="s-min">Tagesziel</label><select id="s-min" data-change="minutes">' + [10, 12, 15, 20].map((m) => '<option value="' + m + '"' + (s.dailyMinutes === m ? ' selected' : '') + '>' + m + ' Minuten</option>').join('') + '</select>' +
       '<label class="check"><input type="checkbox" data-change="toopt" ' + (s.toOptional ? 'checked' : '') + '> Bei Verben ist „to“ freiwillig (z. B. „write“ statt „to write“ gilt als richtig)</label>' +
       '<label class="check"><input type="checkbox" data-change="paperallowed" ' + (s.paperAllowed ? 'checked' : '') + '> Papier-Variante anbieten (Emma schreibt auf Papier und bewertet selbst)</label>' +
+      '<label class="check"><input type="checkbox" data-change="autoapprove" ' + (s.autoApprove ? 'checked' : '') + '> Neue Beispielsätze und Aussprachetipps sofort aktiv (Durchsehen unter „Prüfen“)</label>' +
       '<label class="check"><input type="checkbox" data-change="sound" ' + (s.sound ? 'checked' : '') + '> Töne bei richtig und falsch</label>' +
       '<label for="s-theme">Darstellung</label><select id="s-theme" data-change="theme"><option value="auto"' + (s.theme === 'auto' ? ' selected' : '') + '>Automatisch (wie das Gerät)</option><option value="light"' + (s.theme === 'light' ? ' selected' : '') + '>Hell</option><option value="dark"' + (s.theme === 'dark' ? ' selected' : '') + '>Dunkel</option></select></div>' +
       '<div class="card"><h3 style="margin-top:0">Spracherkennung</h3>' + (SR ? '' : '<p class="pill bad">Dieser Browser hat keine Spracherkennung. Bitte Chrome verwenden.</p>') +
@@ -1347,6 +1402,16 @@
     copyprompt: async () => { try { await navigator.clipboard.writeText(PHOTO_PROMPT); toast('Kopiert.'); } catch (e) { $('#photoprompt').select(); toast('Bitte markierten Text kopieren.'); } },
     'rep-yes': (el) => decideReport(el.dataset.id, true),
     'rep-no': (el) => decideReport(el.dataset.id, false),
+    seen: (el) => { vocabById(el.dataset.id).reviewNew = false; save(); rerender(); },
+    seenall: () => { D.vocab.forEach((v) => { v.reviewNew = false; }); save(); rerender(); },
+    copyenrich: async () => { try { await navigator.clipboard.writeText(enrichText()); toast('Kopiert. Jetzt in einem Claude-Chat einfügen.'); } catch (e) { toast('Kopieren nicht möglich.'); } },
+    pasteenrich: async () => {
+      try {
+        const t = await navigator.clipboard.readText();
+        if (!t || !/englisch/i.test(t)) return toast('In der Zwischenablage ist noch keine Antwort von Claude.');
+        S.tab = 'import'; S.importText = t.replace(/^```[a-z]*\s*|```\s*$/gim, '').trim(); S.preview = parseImport(S.importText); render();
+      } catch (e) { toast('Einfügen nicht erlaubt. Bitte im Reiter „Importieren“ lange ins Textfeld tippen → „Einfügen“.'); }
+    },
     approve: (el) => { vocabById(el.dataset.id).checked = true; save(); rerender(); },
     approveall: () => { if (!confirm('Alle Zusatzinhalte freigeben? Bitte vorher durchlesen.')) return; D.vocab.forEach((v) => { if (needsReview(v)) v.checked = true; }); save(); rerender(); },
     speechon: () => { D.settings.speech = true; save(); rerender(); toast('Spracherkennung eingeschaltet. Chrome fragt beim ersten Mal nach dem Mikrofon: bitte erlauben.'); },
@@ -1383,6 +1448,8 @@
     impunit: (el) => { S.importText = $('#imp').value; S.impUnit = el.value; S.preview = null; rerender(); },
     impnewunit: (el) => { S.impNewUnit = el.value; },
     imppage: (el) => { S.impPage = el.value; },
+    enrunit: (el) => { S.enrichUnit = el.value; rerender(); },
+    autoapprove: (el) => { D.settings.autoApprove = el.checked; save(); },
     imppairs: (el) => { S.impPairs = el.checked; if (S.preview) { syncImportFields(); S.preview = parseImport(S.importText); rerender(); } },
     textfile: (el) => { if (el.files && el.files[0]) readTextFile(el.files[0]); el.value = ''; },
     photo: (el) => { if (el.files && el.files[0]) runOcr(el.files[0]); el.value = ''; }
@@ -1416,6 +1483,9 @@
     const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
   }
+
+  // Einmalig: Aussprachetipps für vorhandene Wörter ergänzen (ändert nichts, wo schon ein Tipp steht)
+  if (!D.autoTipsV1) { D.vocab.forEach((v) => { if (!v.tip) { v.tip = autoTip(v.en); v.tipAuto = !!v.tip; if (v.tip && !v.exEn && !v.exDe) v.checked = true; } }); D.autoTipsV1 = true; save(); }
 
   // Für die automatischen Tests
   window.__teacup = { gradeEn, matchDe, matchEnSpeech, trackWrite, weakCats, catsIn, data: () => D, version: APP_VERSION };
