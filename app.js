@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '1.1.0';
+  const APP_VERSION = '1.2.0';
   const STORE_KEY = 'teacup-data';
   const SAFETY_KEY = 'teacup-data-tagessicherung';
   const SCHEMA = 1;
@@ -138,6 +138,65 @@
     else document.documentElement.setAttribute('data-theme', t);
   }
   applyTheme();
+
+  // ---------- Eigene Symbole (statt Emojis) ----------
+  const ICONS = {
+    gear: '<circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v2.6M12 18.9v2.6M4.6 4.6l1.9 1.9M17.5 17.5l1.9 1.9M2.5 12h2.6M18.9 12h2.6M4.6 19.4l1.9-1.9M17.5 6.5l1.9-1.9"/><circle cx="12" cy="12" r="6.6"/>',
+    cup: '<path d="M4 9h13v4a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6z"/><path d="M17 10h1.5a2.5 2.5 0 0 1 0 5H17M8 3c-1 1.5 1 2.5 0 4M12 3c-1 1.5 1 2.5 0 4M3 21.5h16"/>',
+    party: '<path d="M12 3l1.8 4.6L18.5 9l-4.7 1.4L12 15l-1.8-4.6L5.5 9l4.7-1.4zM19 14.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8zM5 15.5l.6 1.4 1.4.6-1.4.6L5 19.5l-.6-1.4L3 17.5l1.4-.6z"/>',
+    star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
+    download: '<path d="M12 3v12M7 10l5 5 5-5M4 20h16"/>',
+    share: '<path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M12 3v12M7 8l5-5 5 5"/>',
+    pencil: '<path d="M15 4l5 5L9 20H4v-5zM13 6l5 5"/>',
+    check: '<path d="M4 12.5l5 5L20 6.5"/>',
+    x: '<path d="M6 6l12 12M18 6L6 18"/>',
+    back: '<path d="M15 5l-7 7 7 7"/>',
+    speaker: '<path d="M4 9h4l5-4v14l-5-4H4zM16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/>',
+    snail: '<path d="M3 19h12.5M15.5 19a5.5 5.5 0 1 0-5.5-5.5 3 3 0 0 0 3 3 1.5 1.5 0 0 0 0-3M15.5 19c2.5 0 4.5-2 4.5-4.5V8M20 8l-1.5-3M20 8l2-2.5"/>',
+    mic: '<path d="M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5 11a7 7 0 0 0 14 0M12 18v3"/>',
+    speech: '<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/>',
+    repeat: '<path d="M4 11V9a3 3 0 0 1 3-3h12M16 3l3 3-3 3M20 13v2a3 3 0 0 1-3 3H5M8 21l-3-3 3-3"/>',
+    bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.7 1 1.5 1 2.5h6c0-1 .3-1.8 1-2.5A6 6 0 0 0 12 3z"/>',
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',
+    flag: '<path d="M5 21V4h11l-2 4 2 4H5"/>',
+    book: '<path d="M6 3h11a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6zM9 3v18M12 8h3M12 12h3"/>',
+    camera: '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+    file: '<path d="M6 3h8l4 4v14H6zM14 3v4h4M9 13h6M9 17h6"/>',
+    trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'
+  };
+  // Londoner Skyline: Big Ben, Tower Bridge, London Eye, Doppeldeckerbus (Farben über CSS, auch im Dunkelmodus)
+  const SKYLINE = '<svg class="skyline" viewBox="0 0 360 130" aria-hidden="true" preserveAspectRatio="xMidYMax slice">' +
+    '<circle class="sk-sun" cx="318" cy="26" r="13"/>' +
+    '<g class="sk-cloud"><ellipse cx="100" cy="24" rx="20" ry="7"/><ellipse cx="114" cy="19" rx="12" ry="8"/><ellipse cx="200" cy="34" rx="16" ry="5.5"/><ellipse cx="210" cy="30" rx="9" ry="6"/></g>' +
+    '<g class="sk-far"><rect x="0" y="92" width="26" height="38"/><rect x="74" y="86" width="20" height="44"/><rect x="96" y="96" width="18" height="34"/><rect x="226" y="90" width="16" height="40"/><rect x="330" y="88" width="30" height="42"/><path d="M178 130V78l9-24 9 24v52z"/></g>' +
+    '<g class="sk-eye"><circle cx="276" cy="72" r="38" fill="none" stroke-width="3"/><circle cx="276" cy="72" r="4"/>' +
+      [0, 30, 60, 90, 120, 150].map((a) => { const r = a * Math.PI / 180, x = Math.cos(r) * 38, y = Math.sin(r) * 38; return '<path d="M' + (276 - x).toFixed(1) + ' ' + (72 - y).toFixed(1) + 'L' + (276 + x).toFixed(1) + ' ' + (72 + y).toFixed(1) + '" stroke-width="1.2"/>'; }).join('') +
+      [0, 45, 90, 135, 180, 225, 270, 315].map((a) => { const r = a * Math.PI / 180; return '<circle cx="' + (276 + Math.cos(r) * 38).toFixed(1) + '" cy="' + (72 + Math.sin(r) * 38).toFixed(1) + '" r="3.4"/>'; }).join('') +
+      '<path d="M276 72l-16 58M276 72l16 58" stroke-width="3"/></g>' +
+    '<g class="sk-bridge"><rect x="120" y="70" width="14" height="60"/><rect x="152" y="70" width="14" height="60"/><path d="M118 70l9-12 9 12zM150 70l9-12 9 12z"/><rect x="120" y="78" width="46" height="4"/><path d="M100 112h86v5h-86z"/></g>' +
+    '<g class="sk-ben"><rect x="38" y="44" width="22" height="86"/><path d="M36 44h26l-13-30z"/><rect x="47" y="6" width="4" height="10"/></g>' +
+    '<circle class="sk-clock" cx="49" cy="56" r="7"/><path class="sk-hand" d="M49 56v-4.5M49 56h3.5"/>' +
+    '<g class="sk-bus"><rect x="196" y="98" width="62" height="26" rx="5"/><path d="M196 110h62" class="sk-stripe"/>' +
+      '<g class="sk-win"><rect x="201" y="101" width="9" height="6" rx="1.5"/><rect x="213" y="101" width="9" height="6" rx="1.5"/><rect x="225" y="101" width="9" height="6" rx="1.5"/><rect x="237" y="101" width="9" height="6" rx="1.5"/><rect x="249" y="101" width="6" height="6" rx="1.5"/><rect x="201" y="113" width="9" height="6" rx="1.5"/><rect x="213" y="113" width="9" height="6" rx="1.5"/><rect x="225" y="113" width="9" height="6" rx="1.5"/></g>' +
+      '<circle class="sk-wheel" cx="210" cy="125" r="5"/><circle class="sk-wheel" cx="245" cy="125" r="5"/></g>' +
+    '<rect class="sk-ground" x="0" y="126" width="360" height="4"/></svg>';
+  const BUS = '<svg viewBox="0 0 40 26" aria-hidden="true"><rect x="1" y="1" width="38" height="20" rx="4" class="b-body"/><rect x="5" y="4" width="6" height="5" rx="1" class="b-win"/><rect x="13" y="4" width="6" height="5" rx="1" class="b-win"/><rect x="21" y="4" width="6" height="5" rx="1" class="b-win"/><rect x="29" y="4" width="7" height="5" rx="1" class="b-win"/><rect x="5" y="12" width="6" height="5" rx="1" class="b-win"/><rect x="13" y="12" width="6" height="5" rx="1" class="b-win"/><circle cx="9" cy="22" r="3.3" class="b-wheel"/><circle cx="31" cy="22" r="3.3" class="b-wheel"/></svg>';
+  // Kurzes, dezentes Konfetti (entfällt bei „Bewegung reduzieren“)
+  function confetti(n) {
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const colors = ['#7fd8d1', '#f7a8c8', '#ffd98a', '#b9a7f2', '#9be3b4'];
+    const box = document.createElement('div'); box.className = 'confetti'; box.setAttribute('aria-hidden', 'true');
+    for (let i = 0; i < n; i++) {
+      const p = document.createElement('i');
+      p.style.left = (10 + Math.random() * 80) + '%'; p.style.background = colors[i % colors.length];
+      p.style.setProperty('--dx', (Math.random() * 160 - 80) + 'px'); p.style.setProperty('--r', (Math.random() * 720 - 360) + 'deg');
+      p.style.animationDelay = (Math.random() * 0.15) + 's';
+      box.appendChild(p);
+    }
+    document.body.appendChild(box);
+    setTimeout(() => box.remove(), 1300);
+  }
+  const ic = (n, cls) => '<svg class="ic' + (cls ? ' ' + cls : '') + '" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[n] + '</svg>';
 
   // ---------- Töne ----------
   let audioCtx;
@@ -446,7 +505,7 @@
     return c;
   }
   function boxesHtml(c) {
-    return '<div class="boxes">' + [1, 2, 3, 4, 5, 6].map((b) => '<div><b>' + c[b] + '</b><span>' + (b === 6 ? 'Sitzt' : 'Fach ' + b) + '</span></div>').join('') + '</div>';
+    return '<div class="boxes">' + [1, 2, 3, 4, 5, 6].map((b) => '<div class="f' + b + '"><b>' + c[b] + '</b><span>' + (b === 6 ? 'Sitzt' : 'Fach ' + b) + '</span></div>').join('') + '</div>';
   }
   function renderHome() {
     const P = plan();
@@ -461,30 +520,30 @@
       if (P.hw) parts.push(P.hw + ' Hausaufgabe');
       if (P.due) parts.push(Math.min(P.due, ROUND_MAX) + ' Wiederholung');
       if (P.fresh) parts.push(P.fresh + ' neu');
-      if (P.focusIds.size) parts.push(P.focusIds.size + ' Schwerpunkt 🎯');
+      if (P.focusIds.size) parts.push(P.focusIds.size + ' Schwerpunkt ' + ic('target'));
       main = '<div class="card"><h2 style="margin-top:0">Heute dran: ' + P.list.length + ' Wörter</h2><p class="muted">' + esc(parts.join(' · ')) + '</p>' +
         (D.settings.paperAllowed ? '<label class="check"><input type="checkbox" data-change="paper" ' + (D.settings.paperChosen ? 'checked' : '') + '> Ich schreibe auf Papier</label>' : '') +
         '<button class="btn big" data-act="start">Lernrunde starten</button></div>';
     } else {
       const seen = D.vocab.some((v) => prog(v.id).seen);
-      main = '<div class="card good center"><p class="feedback">Alles erledigt für heute! 🎉</p><p>Morgen geht es weiter.</p>' +
+      main = '<div class="card good center"><p class="feedback">Alles erledigt für heute! ' + ic('party') + '</p><p>Morgen geht es weiter.</p>' +
         (seen ? '<button class="btn secondary" data-act="extra">Freiwillig üben</button><p class="small">Freiwilliges Üben ändert die Lernkartei nicht.</p>' : '') + '</div>';
     }
     app.innerHTML =
-      '<div class="topbar"><h1>☕ Teacup</h1><button class="iconbtn" data-act="parent" aria-label="Elternbereich">⚙️' + (dot ? '<span class="badge-dot"></span>' : '') + '</button></div>' +
-      '<div class="hero"><p style="font-size:1.3rem;margin:0"><b>Hallo' + name + '!</b></p></div>' + main +
+      '<div class="topbar"><h1>' + ic('cup') + 'Teacup</h1><button class="iconbtn" data-act="parent" aria-label="Elternbereich">' + ic('gear') + (dot ? '<span class="badge-dot"></span>' : '') + '</button></div>' +
+      '<div class="hero-city">' + SKYLINE + '<div class="hello"><b>Hello' + name + '!</b><span>Schön, dass du da bist.</span></div></div>' + main +
       '<div class="card"><div class="row"><b>Heute gelernt</b><span class="spacer"></span><span>' + mins + ' von ' + goal + ' Min.</span></div>' +
       '<div class="progress" style="margin-top:8px"><div style="width:' + Math.min(100, Math.round((mins / goal) * 100)) + '%"></div></div>' +
-      (mins >= goal ? '<p class="center"><b>Für heute geschafft! 💪</b> Weiterlernen ist freiwillig.</p>' : '') + '</div>' +
+      (mins >= goal ? '<p class="center"><b>Für heute geschafft! ' + ic('star') + '</b> Weiterlernen ist freiwillig.</p>' : '') + '</div>' +
       focusCardHtml() +
       '<div class="card"><h3 style="margin-top:0">Deine Lernkartei</h3>' + boxesHtml(boxCounts(true)) + '</div>' +
-      (installEvt ? '<button class="btn secondary big" data-act="install">📲 App auf dem Startbildschirm installieren</button>' : '');
+      (installEvt ? '<button class="btn secondary big" data-act="install">' + ic('download') + 'App auf dem Startbildschirm installieren</button>' : '');
   }
 
   function focusCardHtml() {
     const weak = weakCats().filter((w) => catWords(w.cat.id).length).slice(0, 3);
     if (!weak.length) return '';
-    return '<div class="card"><h3 style="margin-top:0">🎯 Deine Schwerpunkte</h3><p class="small">Das übst du gerade besonders. Jede Übung dauert 2–3 Minuten.</p>' +
+    return '<div class="card"><h3 style="margin-top:0">' + ic('target') + 'Deine Schwerpunkte</h3><p class="small">Das übst du gerade besonders. Jede Übung dauert 2–3 Minuten.</p>' +
       weak.map((w) => '<button class="btn secondary" style="width:100%;margin-top:8px" data-act="focus" data-id="' + esc(w.cat.id) + '">' + esc(w.cat.label) + ' üben</button>').join('') + '</div>';
   }
 
@@ -548,16 +607,18 @@
       if (!R.paper) { T.errCats = trackWrite(vocabById(T.vid), answer, grade); save(); }
     } else if (ok) { const v = vocabById(T.vid); if (v && v.homework) { v.homework = false; save(); } }
     beep(ok);
+    if (ok) setTimeout(() => confetti(14), 60);
   }
   function roundHeader() {
     const R = S.R, T = curTask();
     const pct = Math.round((R.doneWords.size / R.total) * 100);
-    const label = T.pass > 1 ? 'Noch einmal üben' : 'Wort ' + Math.min(R.total, R.i + 1) + ' von ' + R.total + (T.focus && !R.focusCat ? ' · 🎯' : '');
-    const steps = { write: '✏️ Schreiben', check: '✅ Kontrollieren', speak: '🗣️ Sprechen', repeat: '🔁 Nachsprechen' };
-    return '<div class="topbar"><button class="iconbtn" data-act="quit" aria-label="Runde beenden">✕</button><h1 style="font-size:1.05rem">' + esc(label) + (R.extra ? ' · Extra' : R.focusCat ? ' · 🎯' : '') + '</h1><span class="pill">' + steps[T.phase] + '</span></div>' +
-      '<div class="progress"><div style="width:' + pct + '%"></div></div><div class="steps"><span>' + R.doneWords.size + ' geschafft</span><span>' + R.total + ' Wörter</span></div>';
+    const label = T.pass > 1 ? 'Noch einmal üben' : 'Wort ' + Math.min(R.total, R.i + 1) + ' von ' + R.total;
+    const mark = (T.focus && !R.focusCat) || R.focusCat ? ' ' + ic('target') : '';
+    const steps = { write: ic('pencil') + 'Schreiben', check: ic('check') + 'Kontrollieren', speak: ic('speech') + 'Sprechen', repeat: ic('repeat') + 'Nachsprechen' };
+    return '<div class="topbar"><button class="iconbtn" data-act="quit" aria-label="Runde beenden">' + ic('x') + '</button><h1 style="font-size:1.05rem">' + esc(label) + (R.extra ? ' · Extra' : '') + mark + '</h1><span class="pill">' + steps[T.phase] + '</span></div>' +
+      '<div class="track"><div class="fill" style="width:' + pct + '%"></div><span class="bus" style="left:' + pct + '%">' + BUS + '</span></div><div class="steps"><span>' + R.doneWords.size + ' geschafft</span><span>' + R.total + ' Wörter</span></div>';
   }
-  const speakBtns = (text) => '<div class="speak-row"><button class="btn secondary" data-act="say" data-text="' + esc(text) + '">🔊 Anhören</button><button class="btn secondary" data-act="sayslow" data-text="' + esc(text) + '">🐢 Langsam</button></div>';
+  const speakBtns = (text) => '<div class="speak-row"><button class="btn secondary" data-act="say" data-text="' + esc(text) + '">' + ic('speaker') + 'Anhören</button><button class="btn secondary" data-act="sayslow" data-text="' + esc(text) + '">' + ic('snail') + 'Langsam</button></div>';
   function renderRound() {
     const T = curTask(), v = vocabById(T.vid);
     if (!v) { S.R.doneWords.add(T.vid); return finishTask(); }
@@ -566,7 +627,7 @@
     const meta = [v.pos, unitById(v.unitId) ? unitById(v.unitId).name + (v.page ? ', S. ' + v.page : '') : ''].filter(Boolean).join(' · ');
     if (T.phase === 'write') {
       const fc = S.R.focusCat && catById(S.R.focusCat);
-      if (fc && T.pass === 1 && S.R.i === 0) body += '<div class="tip">🎯 <b>Dein Schwerpunkt:</b> ' + esc(fc.tip) + '</div>';
+      if (fc && T.pass === 1 && S.R.i === 0) body += '<div class="tip">' + ic('target') + '<b>Dein Schwerpunkt:</b> ' + esc(fc.tip) + '</div>';
       body += '<div class="card"><div class="prompt"><div class="label">Wie heißt das auf Englisch?</div><div class="word">' + esc(deText(v)) + '</div><div class="meta">' + esc(meta) + '</div></div>';
       if (S.R.paper) body += '<p class="center">Schreib das englische Wort auf dein Papier.</p><button class="btn big" data-act="reveal">Aufdecken</button></div>';
       else body += '<input type="text" id="ans" class="answer-input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" lang="en" placeholder="englisches Wort" data-enter="check">' +
@@ -581,7 +642,7 @@
   }
   function extrasHtml(v) {
     let h = '';
-    if (v.note) h += '<div class="tip">💡 ' + esc(v.note) + '</div>';
+    if (v.note) h += '<div class="tip">' + ic('bulb') + esc(v.note) + '</div>';
     if (v.checked && (v.exEn || v.exDe)) h += '<p class="center"><i>' + esc(v.exEn) + '</i>' + (v.exDe ? '<br><span class="muted">' + esc(v.exDe) + '</span>' : '') + '</p>';
     return h;
   }
@@ -594,7 +655,7 @@
     const g = T.grade || { kind: T.writeOk ? 'ok' : 'wrong', target: v.en };
     let h;
     if (T.writeOk) {
-      h = '<div class="card good"><p class="feedback">✓ ' + esc(pick(['Richtig!', 'Super!', 'Klasse!', 'Genau!'])) + '</p><div class="solution">' + esc(v.en) + '</div>';
+      h = '<div class="card good pop"><p class="feedback">✓ ' + esc(pick(['Richtig!', 'Super!', 'Klasse!', 'Genau!'])) + '</p><div class="solution">' + esc(v.en) + '</div>';
     } else {
       const msg = {
         near: 'Fast! Nur ein Buchstabe ist anders. Schau dir die rote Stelle an.',
@@ -603,7 +664,7 @@
         empty: 'Kein Problem, so lernst du es jetzt.',
         wrong: 'Noch nicht ganz. Schau dir die Lösung genau an.'
       }[g.kind] || '';
-      h = '<div class="card bad"><p class="feedback">' + esc(msg) + '</p>';
+      h = '<div class="card bad shake"><p class="feedback">' + esc(msg) + '</p>';
       if (T.answer && !S.R.paper && lev(normEn(T.answer).toLowerCase(), g.target.toLowerCase()) <= Math.ceil(g.target.length / 2)) {
         const d = renderDiff(T.answer, g.target);
         h += '<p class="center small" style="margin-bottom:0">Deine Antwort</p><div class="diff">' + d.mine + '</div><p class="center small" style="margin-bottom:0">Richtig ist</p><div class="diff">' + d.sol + '</div>';
@@ -611,7 +672,7 @@
       if (g.kind === 'case') h += '<p class="center small">Namen, Wochentage, Monate und „I“ schreibt man im Englischen groß.</p>';
     }
     h += speakBtns(v.en) + extrasHtml(v) + focusTipsHtml(T, v) + '</div>';
-    if (!T.writeOk && T.answer && !S.R.paper) h += '<button class="btn ghost" data-act="iwasright">🙋 Ich war richtig</button>';
+    if (!T.writeOk && T.answer && !S.R.paper) h += '<button class="btn ghost" data-act="iwasright">' + ic('flag') + 'Ich war richtig</button>';
     if (T.ui.reported) h += '<p class="small center">Gemeldet. Papa oder Mama schauen es sich an.</p>';
     h += '<button class="btn big" data-act="next">Weiter</button>';
     return h;
@@ -621,14 +682,14 @@
     const cats = [];
     (T.errCats || []).forEach((c) => { if (!cats.includes(c)) cats.push(c); });
     wordWeakCats(v, weakCats()).forEach((w) => { if (!cats.find((c) => c.id === w.cat.id)) cats.push(w.cat); });
-    return cats.slice(0, 2).map((c) => '<div class="tip">🎯 ' + esc(c.tip) + '</div>').join('');
+    return cats.slice(0, 2).map((c) => '<div class="tip">' + ic('target') + esc(c.tip) + '</div>').join('');
   }
   function speakHtml(T, v) {
     const u = T.ui;
     let h = '<div class="card"><div class="prompt"><div class="label">Was heißt das auf Deutsch? Sag es laut.</div><div class="word">' + esc(v.en) + '</div></div>';
     if (u.result === undefined) {
       if (speechOn() && !u.selfMode) {
-        h += '<div class="center"><button class="mic' + (u.listening ? ' listening' : '') + '" data-act="listen-de" aria-label="Sprechen">🎤</button><p>' + (u.listening ? 'Ich höre zu …' : esc(u.msg || 'Tippe aufs Mikrofon und sag die deutsche Bedeutung.')) + '</p></div>' +
+        h += '<div class="center"><button class="mic' + (u.listening ? ' listening' : '') + '" data-act="listen-de" aria-label="Sprechen">' + ic('mic') + '</button><p>' + (u.listening ? 'Ich höre zu …' : esc(u.msg || 'Tippe aufs Mikrofon und sag die deutsche Bedeutung.')) + '</p></div>' +
           '<button class="btn ghost" data-act="self-de">Ohne Mikrofon weiter</button>';
       } else if (!u.revealed) {
         h += '<p class="center">Sag die deutsche Bedeutung laut. Dann deck auf.</p><button class="btn big" data-act="reveal-de">Aufdecken</button>';
@@ -640,20 +701,20 @@
     if (u.result) h = '<div class="card good"><p class="feedback">✓ Richtig!</p><div class="solution">' + esc(deText(v)) + '</div>';
     else h = '<div class="card bad"><p class="feedback">Noch nicht ganz.</p>' + (u.heard ? '<p class="center small">Ich habe verstanden: „' + esc(u.heard) + '“</p>' : '') + '<p class="center small" style="margin-bottom:0">Richtig ist</p><div class="solution">' + esc(deText(v)) + '</div>';
     h += '</div>';
-    if (!u.result && u.heard) h += '<button class="btn ghost" data-act="de-right">🙋 Ich war richtig</button>';
+    if (!u.result && u.heard) h += '<button class="btn ghost" data-act="de-right">' + ic('flag') + 'Ich war richtig</button>';
     return h + '<button class="btn big" data-act="next">Weiter</button>';
   }
   function repeatHtml(T, v) {
     const u = T.ui; u.tries = u.tries || 0;
-    let h = '<div class="card"><div class="prompt"><div class="label">' + (T.isNew ? 'Neues Wort: ' : '🎯 Aussprache üben: ') + 'Hör zu und sprich nach.</div><div class="word">' + esc(v.en) + '</div><div class="meta">' + esc(deText(v)) + '</div></div>' + speakBtns(v.en);
+    let h = '<div class="card"><div class="prompt"><div class="label">' + (T.isNew ? 'Neues Wort: ' : ic('target') + 'Aussprache üben: ') + 'Hör zu und sprich nach.</div><div class="word">' + esc(v.en) + '</div><div class="meta">' + esc(deText(v)) + '</div></div>' + speakBtns(v.en);
     if (speechOn() && !u.selfMode) {
       const fin = u.level === 'super' || u.tries >= 3;
-      if (!fin) h += '<div class="center"><button class="mic' + (u.listening ? ' listening' : '') + '" data-act="listen-en" aria-label="Nachsprechen">🎤</button><p>' + (u.listening ? 'Ich höre zu …' : 'Tippe aufs Mikrofon und sprich nach.') + '</p></div>';
+      if (!fin) h += '<div class="center"><button class="mic' + (u.listening ? ' listening' : '') + '" data-act="listen-en" aria-label="Nachsprechen">' + ic('mic') + '</button><p>' + (u.listening ? 'Ich höre zu …' : 'Tippe aufs Mikrofon und sprich nach.') + '</p></div>';
       if (u.level) {
-        const fb = { super: ['good', '🌟 Super verstanden!'], fast: ['warn', 'Fast, hör noch mal hin.'], nochmal: ['bad', 'Noch mal probieren.'] }[u.level];
+        const fb = { super: ['good', ic('star') + 'Super verstanden!'], fast: ['warn', 'Fast, hör noch mal hin.'], nochmal: ['bad', 'Noch mal probieren.'] }[u.level];
         h += '<div class="card ' + fb[0] + ' center"><p class="feedback">' + fb[1] + '</p>' + (u.heard ? '<p class="small">Ich habe verstanden: „' + esc(u.heard) + '“</p>' : '') + '</div>';
       } else if (u.msg) h += '<p class="center">' + esc(u.msg) + '</p>';
-      if (u.tries >= 2 && u.level !== 'super') h += '<div class="tip">👄 ' + esc(v.checked && v.tip ? v.tip : ((catsIn(normEn(v.en)).find((x) => x.cat.say && x.cat.id !== 'final') || {}).cat || { tip: 'Hör genau hin: Ich spreche es dir langsam vor. Achte auf jeden Laut.' }).tip) + '</div>';
+      if (u.tries >= 2 && u.level !== 'super') h += '<div class="tip">' + ic('bulb') + esc(v.checked && v.tip ? v.tip : ((catsIn(normEn(v.en)).find((x) => x.cat.say && x.cat.id !== 'final') || {}).cat || { tip: 'Hör genau hin: Ich spreche es dir langsam vor. Achte auf jeden Laut.' }).tip) + '</div>';
       if (fin) h += '<p class="center small">' + (u.level === 'super' ? '' : 'Gut geübt! Wir machen weiter.') + '</p>';
       h += '</div>' + (fin ? '<button class="btn big" data-act="next">Weiter</button>' : '<button class="btn ghost" data-act="self-en">Ohne Mikrofon weiter</button>');
       return h;
@@ -665,14 +726,15 @@
     const R = S.R;
     const ups = Object.entries(R.moves).filter(([, m]) => m.after > m.before);
     const mins = minutesToday();
-    let h = '<div class="hero"><div class="cup">🎉</div><h1>Runde geschafft!</h1></div><div class="card"><p><b>' + R.firstOk + ' von ' + R.total + '</b> Wörter beim ersten Mal richtig geschrieben.</p>';
-    if (R.focusCat) h += '<p class="small">🎯 Schwerpunkt ' + esc((catById(R.focusCat) || {}).label || '') + ' geübt. Die Lernkartei bleibt unverändert.</p>';
+    setTimeout(() => confetti(40), 100);
+    let h = '<div class="hero-city small-city">' + SKYLINE + '<div class="hello"><b>Runde geschafft!</b><span>Well done!</span></div></div><div class="card"><p><b>' + R.firstOk + ' von ' + R.total + '</b> Wörter beim ersten Mal richtig geschrieben.</p>';
+    if (R.focusCat) h += '<p class="small">' + ic('target') + 'Schwerpunkt ' + esc((catById(R.focusCat) || {}).label || '') + ' geübt. Die Lernkartei bleibt unverändert.</p>';
     else if (R.extra) h += '<p class="small">Extra-Übung: Die Lernkartei bleibt unverändert.</p>';
     else if (ups.length) h += '<p>' + ups.length + ' Wörter sind ein Fach weiter gekommen.</p>';
     h += '</div>';
     const rows = Object.entries(R.moves).map(([vid, m]) => { const v = vocabById(vid); return v ? '<li><span class="grow"><span class="en">' + esc(v.en) + '</span></span><span class="pill ' + (m.after > m.before ? 'good' : 'warn') + '">' + BOX_NAME[m.after] + '</span></li>' : ''; }).join('');
     if (rows) h += '<div class="card"><h3 style="margin-top:0">Deine Wörter</h3><ul class="list">' + rows + '</ul></div>';
-    if (mins >= D.settings.dailyMinutes) h += '<div class="card good center"><p class="feedback">Für heute geschafft! 💪</p><p>Du kannst freiwillig weiterlernen.</p></div>';
+    if (mins >= D.settings.dailyMinutes) h += '<div class="card good center"><p class="feedback">Für heute geschafft! ' + ic('star') + '</p><p>Du kannst freiwillig weiterlernen.</p></div>';
     h += '<button class="btn big" data-act="home">Zur Startseite</button>';
     app.innerHTML = h;
     S.R = null;
@@ -691,7 +753,7 @@
     const setting = !D.pin || S.pinStep === 'change';
     const title = setting ? (S.pinFirst ? 'PIN wiederholen' : (S.pinStep === 'change' ? 'Neue PIN festlegen' : 'Elternbereich einrichten')) : 'Elternbereich';
     const hint = setting ? (S.pinFirst ? 'Bitte dieselbe PIN noch einmal eingeben.' : 'Legen Sie eine 4-stellige PIN fest. Emma sollte sie nicht kennen.') : 'Bitte die 4-stellige PIN eingeben.';
-    app.innerHTML = '<div class="topbar"><button class="iconbtn" data-act="home" aria-label="Zurück">←</button><h1>' + esc(title) + '</h1></div>' +
+    app.innerHTML = '<div class="topbar"><button class="iconbtn" data-act="home" aria-label="Zurück">' + ic('back') + '</button><h1>' + esc(title) + '</h1></div>' +
       '<div class="card"><p>' + esc(hint) + '</p><input type="password" id="pin" class="pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" data-enter="pin">' +
       '<p id="pinmsg" class="small" style="color:var(--bad)"></p><button class="btn big" data-act="pin">' + (setting ? 'Weiter' : 'Öffnen') + '</button></div>';
     $('#pin').focus();
@@ -716,7 +778,7 @@
   function renderParent() {
     const nRev = openReports().length + D.vocab.filter(needsReview).length;
     const tabs = [['vocab', 'Vokabeln'], ['import', 'Importieren'], ['review', 'Prüfen' + (nRev ? ' (' + nRev + ')' : '')], ['analysis', 'Auswertung'], ['settings', 'Einstellungen'], ['backup', 'Sicherung']];
-    let h = '<div class="topbar"><button class="iconbtn" data-act="leave" aria-label="Elternbereich verlassen">←</button><h1>Elternbereich</h1></div>' +
+    let h = '<div class="topbar"><button class="iconbtn" data-act="leave" aria-label="Elternbereich verlassen">' + ic('back') + '</button><h1>Elternbereich</h1></div>' +
       '<div class="tabs" role="tablist">' + tabs.map(([k, l]) => '<button role="tab" aria-selected="' + (S.tab === k) + '" data-act="tab" data-tab="' + k + '">' + esc(l) + '</button>').join('') + '</div>';
     if (backupDue() && S.tab !== 'backup') h += '<div class="card warn"><b>Erinnerung:</b> ' + (D.lastBackupAt ? 'Die letzte Sicherung ist über einen Monat her.' : 'Es gibt noch keine Sicherung.') + ' <button class="btn small" data-act="tab" data-tab="backup">Jetzt sichern</button></div>';
     if (S.tab === 'vocab') h += S.editId ? editHtml() : S.unitId ? unitHtml() : unitsHtml();
@@ -754,13 +816,13 @@
       '<label for="ust">Status</label><select id="ust" data-change="ustatus" data-id="' + u.id + '">' + Object.entries(STATUS).map(([k, l]) => '<option value="' + k + '"' + (u.status === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' +
       '<p class="small">Kommt noch = für Emma unsichtbar · Aktuell = neue Wörter werden eingeführt · Gelernt = nur Wiederholung nach Plan</p></div>';
     h += '<div class="card"><div class="row"><h3 style="margin:0;flex:1">' + words.length + ' Wörter</h3><button class="btn small" data-act="newword">+ Wort</button></div>' +
-      '<p class="small">📝 = als Hausaufgabe markieren (kommt in der nächsten Runde zuerst dran).</p><ul class="list">' +
+      '<p class="small">' + ic('book') + '= als Hausaufgabe markieren (kommt in der nächsten Runde zuerst dran).</p><ul class="list">' +
       words.map((v) => {
         const p = prog(v.id);
         return '<li><span class="grow"><span class="en">' + esc(v.en) + '</span><br><span class="de">' + esc(deText(v)) + ' · S. ' + esc(v.page) + '</span><br>' +
           '<span class="pill">' + (p.seen ? BOX_NAME[p.box] : 'neu') + '</span> ' + (v.homework ? '<span class="pill warn">Hausaufgabe</span> ' : '') + (needsReview(v) ? '<span class="pill bad">ungeprüft</span>' : '') + '</span>' +
-          '<button class="iconbtn" data-act="hw" data-id="' + v.id + '" aria-label="Hausaufgabe" aria-pressed="' + !!v.homework + '" style="' + (v.homework ? 'background:var(--warn-soft);border-color:var(--warn)' : '') + '">📝</button>' +
-          '<button class="iconbtn" data-act="edit" data-id="' + v.id + '" aria-label="Bearbeiten">✏️</button></li>';
+          '<button class="iconbtn" data-act="hw" data-id="' + v.id + '" aria-label="Hausaufgabe" aria-pressed="' + !!v.homework + '" style="' + (v.homework ? 'background:var(--warn-soft);border-color:var(--warn)' : '') + '">' + ic('book') + '</button>' +
+          '<button class="iconbtn" data-act="edit" data-id="' + v.id + '" aria-label="Bearbeiten">' + ic('pencil') + '</button></li>';
       }).join('') + '</ul></div>';
     h += '<div class="card"><button class="btn bad" data-act="delunit">Unit mit allen Wörtern löschen</button></div>';
     return h;
@@ -852,8 +914,8 @@
       (S.impUnit === '__new' ? '<label for="imp-newunit">Name der neuen Unit</label><input type="text" id="imp-newunit" data-change="impnewunit" value="' + esc(S.impNewUnit || '') + '" placeholder="z. B. Unit 2">' : '') +
       '<label for="imp-page">Seite</label><input type="text" id="imp-page" data-change="imppage" inputmode="numeric" value="' + esc(S.impPage || '') + '" placeholder="z. B. 14"></div>' +
       '<div class="card"><h3 style="margin-top:0">2. Wörter hinzufügen</h3><p>Drei Wege, alle landen unten im Textfeld zum Prüfen:</p>' +
-      '<div class="row"><label class="btn" style="margin:0">📷 Foto der Vokabelseite<input type="file" accept="image/*" data-change="photo" hidden></label>' +
-      '<label class="btn secondary" style="margin:0">📄 Textdatei wählen<input type="file" accept=".txt,.csv,.tsv,text/plain,text/csv" data-change="textfile" hidden></label></div>' +
+      '<div class="row"><label class="btn" style="margin:0">' + ic('camera') + 'Foto der Vokabelseite<input type="file" accept="image/*" data-change="photo" hidden></label>' +
+      '<label class="btn secondary" style="margin:0">' + ic('file') + 'Textdatei wählen<input type="file" accept=".txt,.csv,.tsv,text/plain,text/csv" data-change="textfile" hidden></label></div>' +
       '<p id="ocrmsg" class="small">' + esc(S.ocrMsg || '') + '</p>' +
       '<label for="imp">Oder eintippen bzw. einfügen – ein Wort pro Zeile:</label><textarea id="imp" placeholder="friend = Freund / Freundin\nbrother = Bruder\nto have breakfast = frühstücken">' + esc(S.importText) + '</textarea>' +
       '<details><summary><b>Welche Schreibweisen gehen?</b></summary><ul class="small"><li><b>englisch = deutsch</b> (auch mit „ - “ oder „ : “ dazwischen)</li><li>Mehrere Bedeutungen mit Schrägstrich: <i>Freund / Freundin</i></li><li>Mit Hinweis: <i>child ; Kind ; Plural: children</i></li><li>Aus Excel kopiert (Spalten Englisch, Deutsch) oder im vollen Importformat mit Kopfzeile:<br><code>unit;seite;englisch;deutsch;wortart;hinweis;beispiel_en;beispiel_de;aussprache</code></li><li>Textdatei: dieselben Schreibweisen, gespeichert als .txt oder .csv (in Excel: „Speichern unter → CSV“)</li></ul></details>' +
@@ -1005,7 +1067,7 @@
     else h += '<button class="btn secondary small" data-act="approveall">Alle ' + list.length + ' freigeben</button>';
     h += '<ul class="list">' + list.map((v) => '<li><span class="grow"><span class="en">' + esc(v.en) + '</span> <span class="de">(' + esc(deText(v)) + ')</span>' +
       (v.exEn || v.exDe ? '<br>Beispiel: <i>' + esc(v.exEn) + '</i> – ' + esc(v.exDe) : '') + (v.tip ? '<br>Aussprache: ' + esc(v.tip) : '') + '</span>' +
-      '<button class="btn small good" data-act="approve" data-id="' + v.id + '">Freigeben</button><button class="iconbtn" data-act="edit" data-id="' + v.id + '" aria-label="Bearbeiten">✏️</button></li>').join('') + '</ul></div>';
+      '<button class="btn small good" data-act="approve" data-id="' + v.id + '">Freigeben</button><button class="iconbtn" data-act="edit" data-id="' + v.id + '" aria-label="Bearbeiten">' + ic('pencil') + '</button></li>').join('') + '</ul></div>';
     return h;
   }
   function decideReport(id, yes) {
@@ -1042,7 +1104,7 @@
         const bad = (w !== null && w >= WEAK) || (sy !== null && sy >= WEAK);
         return '<li><span class="grow"><span class="en">' + esc(c.label) + '</span><br><span class="de">Schreiben ' + pct(w) + (c.say ? ' · Aussprechen ' + pct(sy) : '') + ' · ' + n + ' Versuche</span> ' + (bad ? '<span class="pill bad">auffällig</span>' : '') + '</span>' +
           '<select data-change="focusmode" data-id="' + esc(c.id) + '" style="width:auto;min-height:44px"><option value="auto"' + (mode === 'auto' ? ' selected' : '') + '>Automatisch</option><option value="on"' + (mode === 'on' ? ' selected' : '') + '>Immer üben</option><option value="off"' + (mode === 'off' ? ' selected' : '') + '>Nicht üben</option></select>' +
-          (c.custom ? '<button class="iconbtn" data-act="delcat" data-id="' + esc(c.id) + '" aria-label="Entfernen">🗑️</button>' : '') + '</li>';
+          (c.custom ? '<button class="iconbtn" data-act="delcat" data-id="' + esc(c.id) + '" aria-label="Entfernen">' + ic('trash') + '</button>' : '') + '</li>';
       }).join('') + '</ul>' +
       '<h3>Eigenen Schwerpunkt hinzufügen</h3><p class="small">Buchstaben oder Wörter, z. B. „I am“, „ch“ oder „-ing“. Die App übt dann alle Vokabeln, in denen das vorkommt.</p>' +
       '<div class="row"><input type="text" id="newcat" placeholder="z. B. I am" style="flex:2 1 160px"><button class="btn secondary" data-act="addcat">+ Hinzufügen</button></div>' +
@@ -1065,7 +1127,7 @@
       '<p class="small">Datenschutz-Hinweis: Die Spracherkennung von Chrome schickt die Sprachaufnahme zur Auswertung an Google. Dafür braucht es Internet. Die App selbst speichert keine Aufnahmen. Ist die Erkennung aus, spricht Emma laut und bewertet sich selbst.</p>' +
       (s.speech ? '<p><span class="pill good">eingeschaltet</span></p><button class="btn secondary" data-act="speechoff">Ausschalten</button> <button class="btn secondary" data-act="mictest">Mikrofon testen</button>'
         : '<button class="btn" data-act="speechon"' + (SR ? '' : ' disabled') + '>Hinweis gelesen, einschalten</button>') + '<p id="mictest" class="small"></p></div>' +
-      '<div class="card"><h3 style="margin-top:0">Stimme</h3><p>' + (gb ? 'Britische Stimme gefunden: ' + esc(gb.name) : 'Noch keine britische Stimme gefunden. Unter Android: Einstellungen → System → Sprachen → Text-in-Sprache → Google, Sprachdaten „English (United Kingdom)“ laden.') + '</p><button class="btn secondary" data-act="say" data-text="Hello! I am your English teacher.">🔊 Stimme testen</button></div>' +
+      '<div class="card"><h3 style="margin-top:0">Stimme</h3><p>' + (gb ? 'Britische Stimme gefunden: ' + esc(gb.name) : 'Noch keine britische Stimme gefunden. Unter Android: Einstellungen → System → Sprachen → Text-in-Sprache → Google, Sprachdaten „English (United Kingdom)“ laden.') + '</p><button class="btn secondary" data-act="say" data-text="Hello! I am your English teacher.">' + ic('speaker') + 'Stimme testen</button></div>' +
       '<div class="card"><button class="btn secondary" data-act="changepin">PIN ändern</button>' + (installEvt ? ' <button class="btn secondary" data-act="install">App installieren</button>' : '') + '<p class="small">Teacup Version ' + APP_VERSION + ' · Alle Daten bleiben auf diesem Gerät.</p></div>';
   }
 
@@ -1073,7 +1135,7 @@
   function backupHtml() {
     let h = '<div class="card"><h3 style="margin-top:0">Sicherung speichern</h3><p>Letzte Sicherung: <b>' + (D.lastBackupAt ? fmtDate(D.lastBackupAt) : 'noch keine') + '</b></p>' +
       '<p class="small">Die Datei enthält alle Vokabeln, den Lernstand und die Einstellungen. Bitte einmal im Monat sichern und die Datei z. B. per E-Mail an sich selbst schicken oder in Google Drive ablegen.</p>' +
-      '<div class="row"><button class="btn" data-act="export">⬇️ Sicherung herunterladen</button>' + (navigator.canShare ? '<button class="btn secondary" data-act="share">📤 Teilen …</button>' : '') + '</div></div>' +
+      '<div class="row"><button class="btn" data-act="export">' + ic('download') + 'Sicherung herunterladen</button>' + (navigator.canShare ? '<button class="btn secondary" data-act="share">' + ic('share') + 'Teilen …</button>' : '') + '</div></div>' +
       '<div class="card"><h3 style="margin-top:0">Sicherung einspielen</h3><p class="small">Zum Beispiel auf einem zweiten Gerät. Achtung: Der Stand auf diesem Gerät wird dabei ersetzt. Die PIN der Sicherung gilt danach.</p>' +
       '<input type="file" id="bfile" data-change="bfile" style="font-size:16px;min-height:48px">';
     if (S.backupFile) {

@@ -1,13 +1,13 @@
 // Service Worker: macht die App offline nutzbar.
 // Wichtig: Der Lernstand liegt NICHT im Cache, sondern im Gerätespeicher (localStorage).
 // Ein Update tauscht nur die Programmdateien aus, die Daten bleiben unberührt.
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 const CACHE = 'teacup-' + VERSION;
 // Große Zusatzdateien (Fotoerkennung) werden erst bei Bedarf geladen und dann dauerhaft gespeichert.
 const VENDOR = 'teacup-vendor-1';
 const FILES = [
   './', './index.html', './styles.css', './app.js', './manifest.webmanifest',
-  './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png'
+  './icons/icon.svg', './fonts/nunito-latin-wght-normal.woff2', './fonts/nunito-latin-ext-wght-normal.woff2', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png'
 ];
 
 self.addEventListener('install', (e) => {
