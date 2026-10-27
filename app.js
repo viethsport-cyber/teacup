@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '1.5.0';
+  const APP_VERSION = '1.6.0';
   const STORE_KEY = 'teacup-data';
   const SAFETY_KEY = 'teacup-data-tagessicherung';
   const SCHEMA = 1;
@@ -106,7 +106,7 @@
       app: 'teacup', schema: SCHEMA, createdAt: new Date().toISOString(),
       books: [{ id: 'gl1', name: 'Green Line 1' }],
       units: [], vocab: [], progress: {}, reports: [],
-      settings: { nickname: '', dailyMinutes: 15, toOptional: true, speech: false, paperAllowed: true, paperChosen: false, autoApprove: true, sound: true, theme: 'auto' },
+      settings: { nickname: '', dailyMinutes: 15, toOptional: true, speech: false, paperAllowed: true, paperChosen: false, autoApprove: true, voiceName: '', slowSpeed: 'sehr langsam', normalRate: 0.85, sound: true, theme: 'auto' },
       pin: null, stats: { days: {} }, newByDay: {}, lastBackupAt: null,
       skills: {}, focusMode: {}, customCats: []
     };
@@ -245,22 +245,41 @@
   // ---------- Vorsprechen (Sprachausgabe von Chrome, britisch) ----------
   let voices = [];
   function loadVoices() { if ('speechSynthesis' in window) voices = speechSynthesis.getVoices(); }
-  if ('speechSynthesis' in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+  if ('speechSynthesis' in window) { loadVoices(); speechSynthesis.onvoiceschanged = () => { loadVoices(); if (S && S.view === 'parent' && S.tab === 'settings' && S.unlocked) rerender(); }; }
+  const gbVoices = () => voices.filter((v) => v.lang && v.lang.replace('_', '-').toLowerCase() === 'en-gb');
+  // Weibliche Stimmen an typischen Namen erkennen (Chrome, Android, Windows, Apple)
+  const FEMALE = /female|frau|woman|serena|kate|martha|libby|sonia|hazel|susan|stephanie|fiona|moira|tessa|amy|emma|olivia|mia|bella|maisie|abbi|hollie|gba|gbc|gbg|fis\b/i;
+  const MALE = /\bmale\b|daniel|arthur|george|ryan|thomas|oliver|alfie|elliot|noah|gbb|gbd|rjs/i;
+  const isFemale = (v) => FEMALE.test(v.name) && !/\bmale\b/i.test(v.name.replace(/female/i, ''));
   function gbVoice() {
-    const gb = voices.filter((v) => v.lang && v.lang.replace('_', '-').toLowerCase() === 'en-gb');
-    return gb.find((v) => /google/i.test(v.name)) || gb.find((v) => v.localService) || gb[0] || null;
+    const gb = gbVoices();
+    if (D.settings.voiceName) { const chosen = gb.find((v) => v.name === D.settings.voiceName); if (chosen) return chosen; }
+    const score = (v) => (isFemale(v) ? 4 : 0) - (MALE.test(v.name) ? 3 : 0) + (/google|natural|enhanced|premium|neural/i.test(v.name) ? 2 : 0) + (v.localService ? 1 : 0);
+    return gb.slice().sort((a, b) => score(b) - score(a))[0] || null;
   }
+  const SLOW_RATES = { langsam: 0.6, 'sehr langsam': 0.45, 'extra langsam': 0.32 };
+  let speakToken = 0;
+  // Vorsprechen. Langsam: deutlich langsamer und bei Sätzen Wort für Wort mit Pausen.
   function speak(text, slow) {
     return new Promise((resolve) => {
       if (!('speechSynthesis' in window)) { toast('Dieses Gerät kann nicht vorsprechen.'); return resolve(); }
+      const token = ++speakToken;
       speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'en-GB';
-      const v = gbVoice(); if (v) u.voice = v;
-      u.rate = slow ? 0.55 : 0.9;
-      u.onend = u.onerror = () => resolve();
-      speechSynthesis.speak(u);
-      setTimeout(resolve, 6000);
+      const v = gbVoice();
+      const rate = slow ? (SLOW_RATES[D.settings.slowSpeed] || 0.45) : (D.settings.normalRate || 0.85);
+      const parts = slow && String(text).trim().split(/\s+/).length > 1 ? String(text).trim().split(/\s+/) : [String(text)];
+      const say = (i) => {
+        if (token !== speakToken) return resolve();
+        if (i >= parts.length) return resolve();
+        const u = new SpeechSynthesisUtterance(parts[i]);
+        u.lang = 'en-GB'; if (v) u.voice = v; u.rate = rate; u.pitch = 1; u.volume = 1;
+        u.onend = () => setTimeout(() => say(i + 1), slow ? 350 : 0);
+        u.onerror = () => resolve();
+        speechSynthesis.speak(u);
+      };
+      // kurze Pause nach cancel(): sonst verschluckt Chrome manchmal den Anfang
+      setTimeout(() => say(0), 120);
+      setTimeout(resolve, 4000 + parts.length * 2500);
     });
   }
 
@@ -1252,8 +1271,26 @@
       '<p class="small">Datenschutz-Hinweis: Die Spracherkennung von Chrome schickt die Sprachaufnahme zur Auswertung an Google. Dafür braucht es Internet. Die App selbst speichert keine Aufnahmen. Ist die Erkennung aus, spricht Emma laut und bewertet sich selbst.</p>' +
       (s.speech ? '<p><span class="pill good">eingeschaltet</span></p><button class="btn secondary" data-act="speechoff">Ausschalten</button> <button class="btn secondary" data-act="mictest">Mikrofon testen</button>'
         : '<button class="btn" data-act="speechon"' + (SR ? '' : ' disabled') + '>Hinweis gelesen, einschalten</button>') + '<p id="mictest" class="small"></p></div>' +
-      '<div class="card"><h3 style="margin-top:0">Stimme</h3><p>' + (gb ? 'Britische Stimme gefunden: ' + esc(gb.name) : 'Noch keine britische Stimme gefunden. Unter Android: Einstellungen → System → Sprachen → Text-in-Sprache → Google, Sprachdaten „English (United Kingdom)“ laden.') + '</p><button class="btn secondary" data-act="say" data-text="Hello! I am your English teacher.">' + ic('speaker') + 'Stimme testen</button></div>' +
+      voiceHtml() +
       '<div class="card"><button class="btn secondary" data-act="changepin">PIN ändern</button>' + (installEvt ? ' <button class="btn secondary" data-act="install">App installieren</button>' : '') + '<p class="small">Teacup Version ' + APP_VERSION + ' · Alle Daten bleiben auf diesem Gerät.</p></div>';
+  }
+
+  function voiceHtml() {
+    const gb = gbVoices(), cur = gbVoice();
+    let h = '<div class="card"><h3 style="margin-top:0">' + ic('speaker') + 'Stimme zum Vorsprechen</h3>';
+    if (!gb.length) h += '<p>Noch keine britische Stimme gefunden. Android: Einstellungen → System → Sprachen → Sprachausgabe (Text-in-Sprache) → Google → Zahnrad → „Sprachdaten installieren“ → „Englisch (Vereinigtes Königreich)“.</p>';
+    else {
+      h += '<p class="small">Britische Stimmen auf diesem Gerät. Mit ▶ probehören, mit „Wählen“ festlegen.</p><ul class="list">' + gb.map((v) =>
+        '<li><span class="grow"><span class="en">' + esc(v.name) + '</span>' + (isFemale(v) ? ' <span class="pill warn">weiblich</span>' : '') + (cur && cur.name === v.name ? ' <span class="pill good">aktiv</span>' : '') + '</span>' +
+        '<button class="iconbtn" data-act="tryvoice" data-name="' + esc(v.name) + '" aria-label="Probehören">' + ic('speaker') + '</button>' +
+        (cur && cur.name === v.name ? '' : '<button class="btn small secondary" data-act="pickvoice" data-name="' + esc(v.name) + '">Wählen</button>') + '</li>').join('') + '</ul>';
+      if (gb.length === 1 || !gb.some(isFemale)) h += '<div class="tip">' + ic('bulb') + '<span>Auf Android-Handys zeigt Chrome meist nur <b>eine</b> britische Stimme. Ob sie weiblich ist, stellen Sie im Handy ein: Einstellungen → System → Sprachen → Sprachausgabe → Google → Zahnrad → Sprache „Englisch (Vereinigtes Königreich)“ → eine weibliche Stimme wählen. Dort auch „Nur WLAN“/„Hohe Qualität“ wählen: Das klingt deutlich klarer.</span></div>';
+    }
+    h += '<label for="s-slow">Tempo bei „Langsam“</label><select id="s-slow" data-change="slowspeed">' + Object.keys(SLOW_RATES).map((k) => '<option' + (D.settings.slowSpeed === k ? ' selected' : '') + '>' + k + '</option>').join('') + '</select>' +
+      '<p class="small">Bei Sätzen spricht „Langsam“ zusätzlich Wort für Wort mit kleinen Pausen.</p>' +
+      '<label for="s-normal">Normales Tempo</label><select id="s-normal" data-change="normalrate">' + [[1, 'normal'], [0.85, 'etwas ruhiger (empfohlen)'], [0.75, 'ruhig']].map(([r, l]) => '<option value="' + r + '"' + (Number(D.settings.normalRate) === r ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' +
+      '<div class="row" style="margin-top:12px"><button class="btn secondary" data-act="say" data-text="Hello! What\'s your name?">' + ic('speaker') + 'Normal testen</button><button class="btn secondary" data-act="sayslow" data-text="Hello! What\'s your name?">' + ic('snail') + 'Langsam testen</button></div></div>';
+    return h;
   }
 
   // ---------- Sicherung ----------
@@ -1402,6 +1439,8 @@
     copyprompt: async () => { try { await navigator.clipboard.writeText(PHOTO_PROMPT); toast('Kopiert.'); } catch (e) { $('#photoprompt').select(); toast('Bitte markierten Text kopieren.'); } },
     'rep-yes': (el) => decideReport(el.dataset.id, true),
     'rep-no': (el) => decideReport(el.dataset.id, false),
+    tryvoice: (el) => { const old = D.settings.voiceName; D.settings.voiceName = el.dataset.name; speak('Hello! My name is Teacup. Nice to meet you.'); D.settings.voiceName = old; },
+    pickvoice: (el) => { D.settings.voiceName = el.dataset.name; save(); rerender(); speak('Hello! I will be your voice.'); },
     seen: (el) => { vocabById(el.dataset.id).reviewNew = false; save(); rerender(); },
     seenall: () => { D.vocab.forEach((v) => { v.reviewNew = false; }); save(); rerender(); },
     copyenrich: async () => { try { await navigator.clipboard.writeText(enrichText()); toast('Kopiert. Jetzt in einem Claude-Chat einfügen.'); } catch (e) { toast('Kopieren nicht möglich.'); } },
@@ -1448,6 +1487,8 @@
     impunit: (el) => { S.importText = $('#imp').value; S.impUnit = el.value; S.preview = null; rerender(); },
     impnewunit: (el) => { S.impNewUnit = el.value; },
     imppage: (el) => { S.impPage = el.value; },
+    slowspeed: (el) => { D.settings.slowSpeed = el.value; save(); },
+    normalrate: (el) => { D.settings.normalRate = Number(el.value); save(); },
     enrunit: (el) => { S.enrichUnit = el.value; rerender(); },
     autoapprove: (el) => { D.settings.autoApprove = el.checked; save(); },
     imppairs: (el) => { S.impPairs = el.checked; if (S.preview) { syncImportFields(); S.preview = parseImport(S.importText); rerender(); } },
