@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '1.4.0';
+  const APP_VERSION = '1.4.1';
   const STORE_KEY = 'teacup-data';
   const SAFETY_KEY = 'teacup-data-tagessicherung';
   const SCHEMA = 1;
@@ -950,6 +950,21 @@
       return rec;
     });
   }
+  // Fehler zusammenfassen, mit konkretem Lösungshinweis
+  function errorSummaryHtml(P) {
+    const count = {};
+    P.forEach((r) => r.errors.forEach((e) => { count[e] = (count[e] || 0) + 1; }));
+    const fix = {
+      'Seite fehlt': 'Bitte oben bei „Seite“ die Seitenzahl eintragen (z. B. 14).',
+      'Unit fehlt': 'Bitte oben eine Unit wählen bzw. den Namen der neuen Unit eintragen.',
+      'Deutsch fehlt': 'Englisch und Deutsch trennen, z. B. „friend = Freund“ (ein Wort mit Leerzeichen dazwischen reicht nicht).',
+      'Englisch fehlt': 'Die Zeile beginnt mit dem Trennzeichen. Bitte „englisch = deutsch“ schreiben.'
+    };
+    const keys = Object.keys(count);
+    if (!keys.length) return '';
+    return '<div class="card bad" style="box-shadow:none"><b>So lassen sich die Fehler beheben:</b><ul style="margin:6px 0 0;padding-left:20px">' +
+      keys.map((k) => '<li><b>' + count[k] + '× ' + esc(k) + ':</b> ' + esc(fix[k] || '') + '</li>').join('') + '</ul><p class="small" style="margin-bottom:0">Danach erneut auf „Vorschau“ tippen.</p></div>';
+  }
   function importHtml() {
     const units = D.units.filter((u) => u.bookId === S.bookId).sort((a, b) => a.order - b.order);
     if (S.impUnit === undefined) S.impUnit = units.length ? units[units.length - 1].id : '__new';
@@ -972,6 +987,7 @@
       const nNew = ok.filter((r) => !r.existing).length, nUpd = ok.length - nNew;
       const newUnits = [...new Set(ok.filter((r) => r.newUnit).map((r) => r.unit))];
       h += '<div class="card"><h3 style="margin-top:0">Vorschau</h3><p><b>' + nNew + '</b> neu · <b>' + nUpd + '</b> werden aktualisiert (Lernstand bleibt) · <b' + (bad ? ' style="color:var(--bad)"' : '') + '>' + bad + '</b> mit Fehler (werden übersprungen)' + (dup ? ' · <b>' + dup + '</b> doppelt' : '') + '</p>' +
+        errorSummaryHtml(P) +
         (newUnits.length ? '<p>Neue Units: ' + esc(newUnits.join(', ')) + '</p><label for="imp-status">Status der neuen Units</label><select id="imp-status">' + Object.entries(STATUS).map(([k, l]) => '<option value="' + k + '"' + (k === 'aktuell' ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' : '') +
         '<label class="check"><input type="checkbox" id="imp-checked"> Beispielsätze und Aussprachetipps sind geprüft (sonst später unter „Prüfen“ freigeben)</label>' +
         '<div class="tablewrap"><table><thead><tr><th>#</th><th>Unit</th><th>S.</th><th>Englisch</th><th>Deutsch</th><th>Status</th></tr></thead><tbody>' +
