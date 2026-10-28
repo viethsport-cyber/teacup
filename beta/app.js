@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.0.2-beta.1';
+  const APP_VERSION = '2.0.3-beta.1';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -511,6 +511,8 @@
   const freshTagged = () => D.vocab.filter((v) => v.homework && unitById(v.unitId));
   // Alle Vokabeln für Testvorbereitung: der Reihe nach, bis jedes Wort einmal dran war
   const allPool = () => D.vocab.filter((v) => { const u = unitById(v.unitId); return u && u.status !== 'kommt'; });
+  // Jede Übung zählt für die Lernkartei, aber höchstens einmal pro Wort und Tag (kein „Sitzt“ an einem Abend)
+  const canMove = (vid) => { const p = prog(vid); return !p.seen || p.last !== today(); };
   function recordWrite(vid, ok) {
     const p = prog(vid), t = today();
     const before = p.box, wasSeen = p.seen;
@@ -655,7 +657,7 @@
           '<button class="btn big" data-act="start">' + ic('book') + 'Mein Tagesplan</button>';
       } else h += '<p class="feedback">Tagesplan erledigt! ' + ic('party') + '</p><p class="center">Du kannst trotzdem weiterüben:</p>';
       if (nFresh) h += '<button class="btn big ' + (P.list.length ? 'secondary' : '') + '" data-act="startfresh" style="margin-top:10px">' + ic('star') + 'Nur neue Vokabeln · ' + nFresh + '</button>';
-      if (nAll) h += '<button class="btn big secondary" data-act="startall" style="margin-top:10px">' + ic('repeat') + 'Alle Vokabeln üben</button><p class="small center" style="margin-bottom:0">Für Tests: geht alle ' + nAll + ' Wörter durch (' + (cycleLeft ? 'noch ' + cycleLeft + ' offen' : 'alle geschafft, nächste Runde beginnt von vorn') + '). Ändert die Lernkartei nicht.</p>';
+      if (nAll) h += '<button class="btn big secondary" data-act="startall" style="margin-top:10px">' + ic('repeat') + 'Alle Vokabeln üben</button><p class="small center" style="margin-bottom:0">Für Tests: geht alle ' + nAll + ' Wörter durch (' + (cycleLeft ? 'noch ' + cycleLeft + ' offen' : 'alle geschafft, nächste Runde beginnt von vorn') + '). Zählt auch für die Lernkartei.</p>';
       main = '<div class="card' + (P.list.length ? '' : ' good') + '">' + h +
         (D.settings.paperAllowed ? '<label class="check" style="margin-top:8px"><input type="checkbox" data-change="paper" ' + (D.settings.paperChosen ? 'checked' : '') + '> Ich schreibe auf Papier</label>' : '') + '</div>';
     }
@@ -665,7 +667,7 @@
       '<div class="hero-city">' + SKYLINE + '<div class="hello"><b>Hello' + name + '!</b><span>Schön, dass du da bist.</span></div></div>' + turboCardHtml() + main + petCardHtml() + pathCardHtml() +
 focusCardHtml() +
       '<div class="card"><h3 style="margin-top:0">Deine Lernkartei<span class="spacer"></span><button class="helpbtn" data-act="karteihelp" aria-label="Was bedeutet das?" aria-expanded="' + !!S.karteiHelp + '">?</button></h3>' + boxesHtml(boxCounts(true)) +
-        unitProgressHtml() + (S.karteiHelp ? '<div class="tip" style="margin-bottom:0">' + ic('bulb') + '<span>Jedes Wort wohnt in einem <b>Fach</b>. Schreibst du es richtig, rückt es ein Fach weiter und kommt erst später wieder dran: Fach 1 morgen, Fach 2 nach 2 Tagen, Fach 3 nach 4, Fach 4 nach 7, Fach 5 nach 14 Tagen. Danach <b>sitzt</b> es! Ist es falsch, startet es wieder in Fach 1 – so übst du schwierige Wörter öfter.</span></div>' : '') + '</div>' +
+        unitProgressHtml() + (S.karteiHelp ? '<div class="tip" style="margin-bottom:0">' + ic('bulb') + '<span>Jedes Wort wohnt in einem <b>Fach</b>. Schreibst du es richtig, rückt es ein Fach weiter und kommt erst später wieder dran: Fach 1 morgen, Fach 2 nach 2 Tagen, Fach 3 nach 4, Fach 4 nach 7, Fach 5 nach 14 Tagen. Danach <b>sitzt</b> es! Ist es falsch, startet es wieder in Fach 1 – so übst du schwierige Wörter öfter. Übst du mehr als den Tagesplan, zählt das auch: Jedes Wort kann pro Tag ein Fach weiterrücken.</span></div>' : '') + '</div>' +
       (installEvt ? '<button class="btn secondary big" data-act="install">' + ic('download') + 'App auf dem Startbildschirm installieren</button>' : '');
   }
 
@@ -710,7 +712,6 @@ focusCardHtml() +
       let open = turboOpen(tst);
       if (!open.length) { tst.cycle = []; open = testWords(tst); }
       list = open.sort((a, b) => prog(b.id).wrong - prog(a.id).wrong || prog(a.id).box - prog(b.id).box).slice(0, roundMax());
-      list.forEach((v) => { const p = prog(v.id); if (p.seen && p.due > t) noBox.add(v.id); });
       if (!list.length) return toast('Für diesen Test sind noch keine Wörter eingetragen.');
     } else if (mode === 'probe' || mode === 'boss') {
       // Probetest / Boss-Kampf: 20 gemischte Aufgaben wie ein Vokabeltest, ohne Hilfen, Auswertung am Ende
@@ -723,13 +724,11 @@ focusCardHtml() +
     } else if (mode === 'fresh') {
       // Nur neue Vokabeln: ungelernte zuerst, dann heute noch nicht geübte, dann schwächere Fächer
       list = freshTagged().sort((a, b) => (prog(a.id).seen ? 1 : 0) - (prog(b.id).seen ? 1 : 0) || (prog(a.id).last === t ? 1 : 0) - (prog(b.id).last === t ? 1 : 0) || prog(a.id).box - prog(b.id).box).slice(0, roundMax());
-      list.forEach((v) => { const p = prog(v.id); if (p.seen && p.due > t) noBox.add(v.id); });
     } else if (mode === 'all') {
       const pool = allPool(); const done = new Set(D.allCycle || []);
       let open = pool.filter((v) => !done.has(v.id));
       if (!open.length) { D.allCycle = []; open = pool; }
       list = open.sort(() => Math.random() - 0.5).slice(0, roundMax());
-      list.forEach((v) => noBox.add(v.id));
     } else if (focusCat) {
       list = catWords(focusCat).sort(() => Math.random() - 0.5).sort((a, b) => prog(b.id).wrong - prog(a.id).wrong).slice(0, 10);
       list.forEach((v) => focusIds.add(v.id));
@@ -739,14 +738,14 @@ focusCardHtml() +
       list = list.sort(() => Math.random() - 0.5).slice(0, 10);
     } else { const P = plan(); list = P.list; focusIds = P.focusIds; }
     if (!list.length) return;
-    if (extra || focusCat) list.forEach((v) => noBox.add(v.id));
+    if (!exam) list.forEach((v) => { if (!canMove(v.id)) noBox.add(v.id); });
     const weak = weakCats();
     S.R = {
       extra, mode: mode || (focusCat ? 'focus' : extra ? 'extra' : 'plan'), focusCat: focusCat || null, paper: D.settings.paperAllowed && D.settings.paperChosen,
       tasks: list.map((v) => {
         const wc = wordWeakCats(v, weak);
         const fc = focusCat ? catById(focusCat) : null;
-        return { vid: v.id, pass: 1, isNew: !prog(v.id).seen, noBox: noBox.has(v.id) || focusIds.has(v.id), focus: focusIds.has(v.id), sayFocus: focusIds.has(v.id) && ((fc && fc.say && speechOn()) || wc.some((w) => w.sayWeak)) };
+        return { vid: v.id, pass: 1, isNew: !prog(v.id).seen, noBox: noBox.has(v.id), focus: focusIds.has(v.id), sayFocus: focusIds.has(v.id) && ((fc && fc.say && speechOn()) || wc.some((w) => w.sayWeak)) };
       }),
       i: 0, part: 1, words: list.map((v) => v.id), total: list.length, doneWords: new Set(), done2: new Set(), firstOk2: 0, moves: {}, firstOk: 0, reported: new Set(), last: Date.now()
     };
@@ -845,7 +844,8 @@ focusCardHtml() +
     if (T.pass === 1) {
       if (ok) R.firstOk++;
       if (!T.noBox) R.moves[T.vid] = recordWrite(T.vid, ok);
-      else if (R.mode === 'all') { D.allCycle = [...new Set([...(D.allCycle || []), T.vid])]; }
+      else R.kept = (R.kept || 0) + 1;
+      if (R.mode === 'all') { D.allCycle = [...new Set([...(D.allCycle || []), T.vid])]; }
       if (R.mode === 'turbo') { const tst = nextTest(); if (tst) { turboOpen(tst); if (!tst.cycle.includes(T.vid)) tst.cycle.push(T.vid); } }
       logEvent('de', T, ok, answer, !T.noBox && R.moves[T.vid] && R.moves[T.vid].after > R.moves[T.vid].before);
       if (!R.paper) { T.errCats = trackWrite(vocabById(T.vid), answer, grade); save(); }
@@ -1010,11 +1010,11 @@ focusCardHtml() +
     setTimeout(() => confetti(40), 100);
     let h = '<div class="hero-city small-city">' + SKYLINE + '<div class="hello"><b>Runde geschafft!</b><span>Well done!</span></div></div><div class="card"><p><b>' + R.firstOk + ' von ' + R.total + '</b> Wörter beim ersten Mal richtig geschrieben.</p>';
     if (R.done2.size) h += '<p><b>' + R.firstOk2 + ' von ' + R.words.length + '</b> beim ersten Mal richtig ins Deutsche übersetzt.</p>';
-    if (R.focusCat) h += '<p class="small">' + ic('target') + 'Schwerpunkt ' + esc((catById(R.focusCat) || {}).label || '') + ' geübt. Die Lernkartei bleibt unverändert.</p>';
-    else if (R.mode === 'all') h += '<p class="small">Alle Vokabeln üben: noch ' + allPool().filter((v) => !(D.allCycle || []).includes(v.id)).length + ' Wörter offen. Die Lernkartei bleibt unverändert.</p>';
+    if (R.focusCat) h += '<p class="small">' + ic('target') + 'Schwerpunkt ' + esc((catById(R.focusCat) || {}).label || '') + ' geübt.</p>';
+    else if (R.mode === 'all') h += '<p class="small">Alle Vokabeln üben: noch ' + allPool().filter((v) => !(D.allCycle || []).includes(v.id)).length + ' Wörter offen.</p>';
     else if (R.mode === 'fresh') h += '<p class="small">Nur neue Vokabeln geübt.</p>';
-    else if (R.extra) h += '<p class="small">Extra-Übung: Die Lernkartei bleibt unverändert.</p>';
-    else if (ups.length) h += '<p>' + ups.length + ' Wörter sind ein Fach weiter gekommen.</p>';
+    if (ups.length) h += '<p>' + ic('star') + '<b>' + ups.length + '</b> ' + (ups.length === 1 ? 'Wort ist' : 'Wörter sind') + ' ein Fach weiter gekommen.</p>';
+    if (R.kept) h += '<p class="small">' + R.kept + (R.kept === 1 ? ' Wort hattest' : ' Wörter hattest') + ' du heute schon geübt. Jedes Wort rückt höchstens ein Fach pro Tag weiter, damit es sich gut einprägt. Morgen geht es weiter.</p>';
     h += '</div>';
     const rows = Object.entries(R.moves).map(([vid, m]) => { const v = vocabById(vid); return v ? '<li><span class="grow"><span class="en">' + esc(v.en) + '</span></span><span class="pill ' + (m.after > m.before ? 'good' : 'warn') + '">' + BOX_NAME[m.after] + '</span></li>' : ''; }).join('');
     if (rows) h += '<div class="card"><h3 style="margin-top:0">Deine Wörter</h3><ul class="list">' + rows + '</ul></div>';
@@ -1174,8 +1174,7 @@ focusCardHtml() +
     if (['freewrite', 'hearwrite', 'gap'].includes(t.type) && v) {
       if (t.try === 1 && !L.written.has(v.id)) {
         L.written.add(v.id);
-        const p = prog(v.id);
-        if (!p.seen || p.due <= today()) recordWrite(v.id, ok);
+        if (canMove(v.id)) recordWrite(v.id, ok);
         if (t.type !== 'gap') trackWrite(v, answer, t.grade);
       }
       L.session.ev.push({ v: v.id, en: v.en, de: deText(v), d: 'de', ok: !!ok, a: answer || '', p: t.try, t: Date.now() });
@@ -2261,7 +2260,7 @@ focusCardHtml() +
   function analysisHtml() {
     const weak = weakCats();
     let h = '<div class="card soft"><p style="margin-top:0"><b>So funktioniert es:</b> Die App merkt sich bei jedem Fehler, an welcher Stelle im Wort er passiert ist (z. B. beim „th“ oder bei der Großschreibung), und beim Nachsprechen, welche Laute nicht verstanden wurden. Fällt ein Bereich auf (ab 3 Versuchen, mindestens jede dritte Antwort falsch), wird er zum <b>Schwerpunkt</b>:</p>' +
-      '<ul><li>Bis zu 5 passende Wörter kommen zusätzlich in jede Lernrunde.</li><li>Auf Emmas Startseite erscheint eine kurze Schwerpunkt-Übung.</li><li>Bei passenden Wörtern zeigt die App den Tipp dazu.</li></ul><p class="small">Neuere Ergebnisse zählen mehr. Wird Emma besser, verschwindet der Schwerpunkt von selbst. Schwerpunkt-Übungen verändern die Lernkartei nicht.</p></div>';
+      '<ul><li>Bis zu 5 passende Wörter kommen zusätzlich in jede Lernrunde.</li><li>Auf Emmas Startseite erscheint eine kurze Schwerpunkt-Übung.</li><li>Bei passenden Wörtern zeigt die App den Tipp dazu.</li></ul><p class="small">Neuere Ergebnisse zählen mehr. Wird Emma besser, verschwindet der Schwerpunkt von selbst. Auch Schwerpunkt-Übungen zählen für die Lernkartei (höchstens ein Fach pro Wort und Tag).</p></div>';
     h += '<div class="card"><h3 style="margin-top:0">Aktuelle Schwerpunkte</h3>' + (weak.length ? '<ul class="list">' + weak.map((w) => {
       const ex = [].concat((D.skills[w.cat.id + ':write'] || {}).ex || [], (D.skills[w.cat.id + ':say'] || {}).ex || []).slice(0, 3);
       return '<li><span class="grow"><span class="en">' + esc(w.cat.label) + '</span> ' + (w.manual ? '<span class="pill">von Ihnen gesetzt</span>' : '<span class="pill warn">automatisch erkannt</span>') +
