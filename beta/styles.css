@@ -286,3 +286,62 @@ pre.summary { white-space: pre-wrap; font: inherit; font-size: 16px; background:
 .recrow { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; margin: 10px 0; }
 .bigstars { color: #f2b400 !important; font-size: 1.8rem !important; letter-spacing: 4px; text-shadow: 0 1px 0 rgba(0,0,0,.15); }
 .bigstars .off { color: var(--line); }
+
+/* Stufe 3: Begleiter, Truhe, Album, Abzeichen, Shop, Minispiele */
+.petcard .petrow { display: flex; gap: 14px; align-items: center; }
+.petbox { width: 140px; flex: none; border-radius: 18px; overflow: hidden; border: 2px solid var(--line); }
+.petbox.big { width: 220px; margin: 0 auto; }
+.petsvg { display: block; width: 100%; height: auto; }
+.petinfo { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.petname { font-size: 1.3rem; font-weight: 900; }
+.petstats { display: flex; gap: 6px; flex-wrap: wrap; }
+.pill.star { background: var(--sun-soft); color: var(--warn); }
+.pill.star .ic, .pstar { color: #e0a800; }
+.gamegrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.gamegrid .btn { min-height: 52px; font-size: 16px; padding: 8px 10px; }
+.lockic { opacity: .6; }
+.chestbtn { background: linear-gradient(90deg, #f2b400, var(--accent)); color: #1d2a35; box-shadow: 0 4px 0 #b88400; }
+@media (max-width: 380px) { .petbox { width: 110px; } }
+.uprog { display: grid; grid-template-columns: minmax(70px, 30%) 1fr auto; gap: 8px; align-items: center; margin: 4px 0; font-size: 16px; }
+.uprog > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 10px; }
+.acard-btn { border: 0; padding: 0; background: none; cursor: pointer; font: inherit; color: inherit; }
+.acard { border-radius: 16px; padding: 10px 6px; text-align: center; background: var(--card); border: 2px solid var(--line); min-height: 120px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.acard.selten { border-color: var(--primary); background: var(--primary-soft); }
+.acard.golden { border-color: #e0a800; background: linear-gradient(160deg, #fff6d1, #ffe08a); color: #1d2a35; }
+.acard.locked { opacity: .5; }
+.acard .aicon { font-size: 2.4rem; line-height: 1.1; }
+.acard .aname { font-weight: 800; font-size: 16px; }
+.acard .arar { font-size: 14px; color: var(--muted); }
+.acard.golden .arar { color: #7a5600; }
+.acard.big { max-width: 360px; margin: 0 auto; padding: 18px; }
+.acard.big .aicon { font-size: 4rem; }
+.acard .aen { font-weight: 700; margin: 6px 0 0; }
+.acard .ade { color: var(--muted); margin: 4px 0 8px; font-size: 16px; }
+.acard.golden .ade { color: #5b4a1c; }
+.bgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.badge { border-radius: 16px; border: 2px solid var(--line); background: var(--card); padding: 12px; text-align: center; display: flex; flex-direction: column; gap: 4px; align-items: center; opacity: .55; }
+.badge.got { opacity: 1; border-color: #e0a800; background: var(--sun-soft); }
+.bmedal { width: 52px; height: 52px; border-radius: 50%; background: var(--line); display: flex; align-items: center; justify-content: center; }
+.badge.got .bmedal { background: #ffc83d; color: #7a5600; }
+.bmedal .ic { width: 28px; height: 28px; }
+.shopgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.shopitem { border: 2px solid var(--line); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 8px; background: var(--card); }
+.shopitem.on { border-color: var(--good); }
+.gamelist { display: grid; gap: 10px; }
+.gamebtn { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 12px; align-items: center; text-align: left; border: 2px solid var(--line); border-radius: 16px; background: var(--card); color: var(--text); font: inherit; padding: 14px; cursor: pointer; box-shadow: 0 3px 0 var(--line); }
+.gamebtn .ic { grid-row: span 2; width: 34px; height: 34px; color: var(--pink); }
+.gamebtn .pill { grid-column: 2; justify-self: start; margin-top: 4px; }
+.memgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (min-width: 600px) { .memgrid { grid-template-columns: repeat(4, 1fr); } }
+.memcard { min-height: 76px; border-radius: 14px; border: 2px solid var(--primary); background: var(--primary); color: var(--primary-text); font: inherit; font-weight: 800; font-size: 1.4rem; cursor: pointer; padding: 6px; word-break: break-word; }
+.memcard.open { background: var(--card); color: var(--text); font-size: 15px; }
+.memcard.found { background: var(--good-soft); border-color: var(--good); color: var(--good); }
+.snake { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; margin: 6px 0; }
+.snakew { background: var(--primary-soft); border-radius: 10px; padding: 4px 10px; font-weight: 800; }
+.bigletter { font-size: 1.6rem; color: var(--pink); }
+.balloon { width: 150px; height: auto; display: block; margin: 0 auto; }
+.hang { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 1.8rem; font-weight: 800; letter-spacing: .1em; margin: 8px 0; }
+.keys { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.key { width: 44px; height: 48px; border-radius: 10px; border: 2px solid var(--line); background: var(--card); color: var(--text); font: inherit; font-weight: 800; font-size: 1.1rem; cursor: pointer; }
+.key:disabled { opacity: .3; }
