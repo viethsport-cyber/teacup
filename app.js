@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '1.9.1';
+  const APP_VERSION = '1.10.0';
   const STORE_KEY = 'teacup-data';
   const SAFETY_KEY = 'teacup-data-tagessicherung';
   const SCHEMA = 1;
@@ -107,7 +107,7 @@
       app: 'teacup', schema: SCHEMA, createdAt: new Date().toISOString(),
       books: [{ id: 'gl1', name: 'Green Line 1' }],
       units: [], vocab: [], progress: {}, reports: [],
-      settings: { nickname: '', dailyMinutes: 15, toOptional: true, speech: false, paperAllowed: true, paperChosen: false, autoApprove: true, roundSize: 15, voiceName: '', slowSpeed: 'sehr langsam', normalRate: 0.85, sound: true, theme: 'auto' },
+      settings: { nickname: '', dailyMinutes: 15, toOptional: true, speech: false, paperAllowed: true, paperChosen: false, autoApprove: true, roundSize: 15, sayMode: 'haeufig', voiceName: '', slowSpeed: 'sehr langsam', normalRate: 0.85, sound: true, theme: 'auto' },
       pin: null, stats: { days: {} }, newByDay: {}, lastBackupAt: null,
       skills: {}, focusMode: {}, customCats: []
     };
@@ -300,6 +300,7 @@
         finish({ list });
       };
       rec.onerror = (e) => finish({ error: e.error, list: [] });
+      rec.onnomatch = () => finish({ error: 'no-match', list: [] });
       rec.onend = () => finish({ error: 'no-speech', list: [] });
       try { rec.start(); } catch (e) { finish({ error: 'start', list: [] }); }
       setTimeout(() => { try { rec.stop(); } catch (e) { /* */ } }, 9000);
@@ -700,11 +701,20 @@
     let idx = order.indexOf(T.phase) + 1;
     while (idx < order.length) {
       const ph = order[idx];
-      if (ph !== 'repeat' || (T.pass === 1 && (T.isNew || T.sayFocus))) break;
+      if (ph !== 'repeat' || (T.pass === 1 && (T.isNew || T.sayFocus || sayAgain(T)))) break;
       idx++;
     }
     if (idx < order.length) { T.phase = order[idx]; T.ui = {}; save(); return render(); }
     finishTask();
+  }
+  // Nachsprechen auch bei bekannten Wörtern: immer, häufig (falsche + jedes zweite) oder nur neue
+  function sayAgain(T) {
+    const mode = D.settings.sayMode || 'haeufig';
+    if (mode === 'immer') return true;
+    if (mode === 'neu') return false;
+    if (!T.writeOk) return true;
+    S.R.sayCount = (S.R.sayCount || 0) + 1;
+    return S.R.sayCount % 2 === 1;
   }
   function finishTask() {
     const R = S.R, T = curTask();
@@ -853,12 +863,12 @@
   function setDe(ok, answer) { const T = curTask(); T.deOk = ok; T.deAnswer = answer; logEvent('en', T, ok, answer, false); save(); if (T.pass === 1 && ok) S.R.firstOk2++; beep(ok); if (ok) setTimeout(() => confetti(14), 60); }
   function repeatHtml(T, v) {
     const u = T.ui; u.tries = u.tries || 0;
-    let h = '<div class="card"><div class="prompt"><div class="label">' + (T.isNew ? 'Neues Wort: ' : ic('target') + 'Aussprache üben: ') + 'Hör zu und sprich nach.</div><div class="word' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div><div class="meta">' + esc(deText(v)) + '</div></div>' + speakBtns(v.en);
+    let h = '<div class="card"><div class="prompt"><div class="label">' + (T.isNew ? 'Neues Wort: ' : T.sayFocus ? ic('target') + 'Aussprache üben: ' : 'Sprich es laut: ') + 'Hör zu und sprich nach.</div><div class="word' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div><div class="meta">' + esc(deText(v)) + '</div></div>' + speakBtns(v.en);
     if (speechOn() && !u.selfMode) {
       const fin = u.level === 'super' || u.tries >= 3;
       if (!fin) h += '<div class="center"><button class="mic' + (u.listening ? ' listening' : '') + '" data-act="listen-en" aria-label="Nachsprechen">' + ic('mic') + '</button><p>' + (u.listening ? 'Ich höre zu …' : 'Tippe aufs Mikrofon und sprich nach.') + '</p></div>';
       if (u.level) {
-        const fb = { super: ['good', ic('star') + 'Super verstanden!'], fast: ['warn', 'Fast, hör noch mal hin.'], nochmal: ['bad', 'Noch mal probieren.'] }[u.level];
+        const fb = { super: ['good', ic('star') + 'Super verstanden!'], fast: ['warn', 'Fast, hör noch mal hin.'], nochmal: ['bad', u.heard ? 'Das war noch nicht richtig. Versuch es noch einmal.' : 'Das habe ich nicht richtig verstanden – das war noch nicht ganz richtig. Hör genau hin und versuch es noch einmal.'] }[u.level];
         h += '<div class="card ' + fb[0] + ' center"><p class="feedback">' + fb[1] + '</p>' + (u.heard ? '<p class="small">Ich habe verstanden: „' + esc(u.heard) + '“</p>' : '') + '</div>';
       } else if (u.msg) h += '<p class="center">' + esc(u.msg) + '</p>';
       if (u.tries >= 2 && u.level !== 'super') h += '<div class="tip">' + ic('bulb') + esc(v.checked && v.tip ? v.tip : ((catsIn(normEn(v.en)).find((x) => x.cat.say && x.cat.id !== 'final') || {}).cat || { tip: 'Hör genau hin: Ich spreche es dir langsam vor. Achte auf jeden Laut.' }).tip) + '</div>';
@@ -1432,6 +1442,7 @@
     return '<div class="card"><label for="s-nick">Spitzname (wird auf der Startseite angezeigt)</label><input type="text" id="s-nick" value="' + esc(s.nickname) + '" data-change="nick" maxlength="20">' +
       '<label for="s-round">Wörter pro Runde</label><select id="s-round" data-change="roundsize">' + [5, 10, 15, 20].map((n) => '<option value="' + n + '"' + (Number(s.roundSize) === n ? ' selected' : '') + '>' + n + ' Wörter</option>').join('') + '</select>' +
       '<p class="small">Jede Runde hat zwei Teile: erst Deutsch → Englisch, dann dieselben Wörter Englisch → Deutsch.</p>' +
+      '<label for="s-say">Nachsprechen</label><select id="s-say" data-change="saymode">' + [['immer', 'bei jedem Wort'], ['haeufig', 'häufig: neue, falsche und jedes zweite Wort (empfohlen)'], ['neu', 'nur bei neuen Wörtern']].map(([k, l]) => '<option value="' + k + '"' + ((s.sayMode || 'haeufig') === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' +
       '<label for="s-min">Tagesziel</label><select id="s-min" data-change="minutes">' + [10, 12, 15, 20].map((m) => '<option value="' + m + '"' + (s.dailyMinutes === m ? ' selected' : '') + '>' + m + ' Minuten</option>').join('') + '</select>' +
       '<label class="check"><input type="checkbox" data-change="toopt" ' + (s.toOptional ? 'checked' : '') + '> Bei Verben ist „to“ freiwillig (z. B. „write“ statt „to write“ gilt als richtig)</label>' +
       '<label class="check"><input type="checkbox" data-change="paperallowed" ' + (s.paperAllowed ? 'checked' : '') + '> Papier-Variante anbieten (Emma schreibt auf Papier und bewertet selbst)</label>' +
@@ -1640,8 +1651,10 @@
     'listen-en': async () => {
       const T = curTask(), v = vocabById(T.vid), u = T.ui; u.listening = true; u.level = ''; render();
       const r = await listen('en-GB'); u.listening = false;
-      if (r.error && !r.list.length) { u.msg = speechErrorText(r.error); if (['not-allowed', 'service-not-allowed', 'network', 'audio-capture'].includes(r.error)) u.selfMode = true; return render(); }
-      u.tries++; u.heard = r.list[0]; u.level = matchEnSpeech(r.list, v); beep(u.level === 'super');
+      const hard = ['not-allowed', 'service-not-allowed', 'network', 'audio-capture'];
+      if (r.error && !r.list.length && (hard.includes(r.error) || r.error === 'aborted')) { u.msg = speechErrorText(r.error); if (hard.includes(r.error)) u.selfMode = true; return render(); }
+      // Nichts erkannt (z. B. undeutlich ausgesprochen) zählt als Fehlversuch mit klarer Rückmeldung
+      u.tries++; u.heard = r.list[0] || ''; u.level = r.list.length ? matchEnSpeech(r.list, v) : 'nochmal'; beep(u.level === 'super');
       if (u.tries === 1) { trackSay(v, u.level === 'super', u.heard); save(); }
       render();
       if (u.tries === 2 && u.level !== 'super') setTimeout(() => speak(v.en, true), 400);
@@ -1750,6 +1763,7 @@
     impunit: (el) => { S.importText = $('#imp').value; S.impUnit = el.value; S.preview = null; rerender(); },
     impnewunit: (el) => { S.impNewUnit = el.value; },
     imppage: (el) => { S.impPage = el.value; },
+    saymode: (el) => { D.settings.sayMode = el.value; save(); },
     roundsize: (el) => { D.settings.roundSize = Number(el.value); save(); },
     slowspeed: (el) => { D.settings.slowSpeed = el.value; save(); },
     normalrate: (el) => { D.settings.normalRate = Number(el.value); save(); },
