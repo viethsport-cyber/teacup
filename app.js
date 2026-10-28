@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '1.9.0';
+  const APP_VERSION = '1.9.1';
   const STORE_KEY = 'teacup-data';
   const SAFETY_KEY = 'teacup-data-tagessicherung';
   const SCHEMA = 1;
@@ -193,7 +193,7 @@
     trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'
   };
   // Londoner Skyline: Big Ben, Tower Bridge, London Eye, Doppeldeckerbus (Farben über CSS, auch im Dunkelmodus)
-  const SKYLINE = '<svg class="skyline" viewBox="0 0 360 130" aria-hidden="true" preserveAspectRatio="xMidYMax slice">' +
+  const SKYLINE = '<svg class="skyline" viewBox="0 0 360 130" aria-hidden="true" preserveAspectRatio="xMidYMax meet">' +
     '<circle class="sk-sun" cx="318" cy="26" r="13"/>' +
     '<g class="sk-cloud"><ellipse cx="100" cy="24" rx="20" ry="7"/><ellipse cx="114" cy="19" rx="12" ry="8"/><ellipse cx="200" cy="34" rx="16" ry="5.5"/><ellipse cx="210" cy="30" rx="9" ry="6"/></g>' +
     '<g class="sk-far"><rect x="0" y="92" width="26" height="38"/><rect x="74" y="86" width="20" height="44"/><rect x="96" y="96" width="18" height="34"/><rect x="226" y="90" width="16" height="40"/><rect x="330" y="88" width="30" height="42"/><path d="M178 130V78l9-24 9 24v52z"/></g>' +

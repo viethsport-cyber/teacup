@@ -92,7 +92,9 @@ h3 .ic, .feedback .ic { color: var(--pink); }
 /* Startseite: Skyline */
 .hero-city { position: relative; border-radius: var(--radius); overflow: hidden; background: linear-gradient(160deg, var(--sky1), var(--sky2)); margin: 4px 0 12px; height: 190px; box-shadow: var(--shadow); }
 .hero-city.small-city { height: 190px; }
-.skyline { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: 68%; }
+.skyline { position: absolute; left: 0; right: 0; bottom: 4px; width: 100%; height: 70%; }
+/* Boden läuft über die ganze Breite, auch wenn die Skyline auf breiten Geräten mittig steht */
+.hero-city::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 8px; background: var(--sk-ground); }
 .sk-far { fill: var(--sk-far); } .sk-ben { fill: var(--sk-ben); } .sk-bridge { fill: var(--sk-bridge); }
 .sk-eye { fill: var(--sk-eye); stroke: var(--sk-eye); }
 .sk-bus > rect:first-child { fill: var(--sk-bus); } .sk-stripe { stroke: var(--sk-win); stroke-width: 1.5; opacity: .6; } .sk-win rect { fill: var(--sk-win); } .sk-wheel { fill: var(--text); }
@@ -224,7 +226,8 @@ tr.err td { background: var(--bad-soft); }
 .tip { display: flex; gap: 8px; align-items: flex-start; border-left: 5px solid var(--accent); padding: 10px 12px; background: var(--pink-soft); border-radius: 12px; margin: 10px 0; }
 .tip .ic { color: var(--pink); margin-top: 2px; }
 
-@media (min-width: 700px) and (orientation: landscape) { #app { max-width: 920px; } .hero-city { height: 200px; } }
+@media (min-width: 700px) { .hero-city, .hero-city.small-city { height: 230px; } .skyline { height: 70%; } .hello { right: auto; } }
+@media (min-width: 700px) and (orientation: landscape) { #app { max-width: 920px; } }
 
 /* Statistik: ein Balken pro Tag (eine Datenreihe, daher keine Legende) */
 .statchart { width: 100%; height: auto; display: block; margin-top: 4px; }
