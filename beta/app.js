@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.0.1-beta.1';
+  const APP_VERSION = '2.0.2-beta.1';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -2343,7 +2343,8 @@ focusCardHtml() +
     h += '<div class="card"><h3 style="margin-top:0">Komplette Sicherung</h3><p>Letzte Sicherung: <b>' + (D.lastBackupAt ? fmtDate(D.lastBackupAt) : 'noch keine') + '</b></p>' +
       '<p class="small">Die Datei enthält alle Vokabeln, den Lernstand und die Einstellungen. Bitte einmal im Monat sichern und die Datei z. B. per E-Mail an sich selbst schicken oder in Google Drive ablegen.</p>' +
       '<div class="row"><button class="btn" data-act="export">' + ic('download') + 'Sicherung herunterladen</button>' + (navigator.canShare ? '<button class="btn secondary" data-act="share">' + ic('share') + 'Teilen …</button>' : '') + '</div><p class="small">Eine komplette Sicherung spielen Sie ebenfalls über „3. Empfangene Datei einspielen“ ein. Sie ersetzt dann alles auf dem Gerät.</p></div>' +
-      '';
+      '<div class="card"><h3 style="margin-top:0">Lernstand zurücksetzen</h3><p class="small" style="margin-top:0">Für einen Neustart, z. B. nach dem Ausprobieren. Gelöscht werden auf <b>diesem Gerät</b>: Lernkartei-Fächer, Statistik, Lernzeiten, Fehler, Lernpfad, Sterne, Begleiter, Album und Shop. <b>Erhalten bleiben</b> alle Vokabeln, Units, Testtermine, Einstellungen und die PIN.</p>' +
+      '<button class="btn secondary" data-act="resetprogress">Lernstand auf diesem Gerät zurücksetzen</button></div>';
     return h;
   }
   function backupBlob() {
@@ -2555,6 +2556,13 @@ focusCardHtml() +
       rerender();
     },
     gtwister: () => { const gm = S.G; recReset(); gm.said++; gm.i++; if (gm.i >= gm.list.length) return finishGame(3); rerender(); },
+    resetprogress: () => {
+      if (!confirm('Lernstand auf diesem Gerät wirklich zurücksetzen? Die Vokabeln bleiben erhalten.')) return;
+      const before = JSON.stringify(D);
+      Object.assign(D, { progress: {}, stats: { days: {} }, sessions: [], skills: {}, reports: [], newByDay: {}, allCycle: [], game: {}, path: {}, bossWon: {} });
+      save(); rerender();
+      toast('Lernstand zurückgesetzt. Emma startet bei null.', 'Rückgängig', () => { D = migrate(JSON.parse(before)); save(); rerender(); toast('Wiederhergestellt.'); });
+    },
     betareload: () => { if (!confirm('Stand der Testversion durch die Daten der normalen App ersetzen?')) return; const raw = localStorage.getItem(LIVE_KEY); if (!raw) return; localStorage.setItem(STORE_KEY, raw); D = load(); S.unlocked = false; S.view = 'home'; render(); toast('Daten der normalen App übernommen.'); },
     openpath: () => { recReset(); S.view = 'path'; render(); },
     pathunit: (el) => { S.pathUnit = el.dataset.id; render(); },
