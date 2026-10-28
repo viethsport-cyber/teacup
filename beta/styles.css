@@ -345,3 +345,5 @@ pre.summary { white-space: pre-wrap; font: inherit; font-size: 16px; background:
 .keys { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
 .key { width: 44px; height: 48px; border-radius: 10px; border: 2px solid var(--line); background: var(--card); color: var(--text); font: inherit; font-weight: 800; font-size: 1.1rem; cursor: pointer; }
 .key:disabled { opacity: .3; }
+.betabar { background: var(--warn-soft); color: var(--warn); border: 2px solid var(--warn); border-radius: 12px; padding: 6px 12px; font-size: 15px; font-weight: 700; margin-bottom: 10px; text-align: center; }
+.toastx { margin-left: 8px; background: transparent; border: 0; color: inherit; font-size: 20px; cursor: pointer; min-width: 40px; min-height: 40px; }

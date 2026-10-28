@@ -153,11 +153,11 @@
   let toastTimer;
   function toast(msg, actionLabel, action) {
     const t = document.getElementById('toast');
-    t.innerHTML = esc(msg) + (actionLabel ? ' <button class="btn small" id="toastAct">' + esc(actionLabel) + '</button>' : '');
+    t.innerHTML = esc(msg) + (actionLabel ? ' <button class="btn small" id="toastAct">' + esc(actionLabel) + '</button><button class="toastx" id="toastX" aria-label="Schließen">✕</button>' : '');
     t.hidden = false;
-    if (actionLabel) document.getElementById('toastAct').onclick = () => { t.hidden = true; action(); };
+    if (actionLabel) { document.getElementById('toastAct').onclick = () => { t.hidden = true; action(); }; document.getElementById('toastX').onclick = () => { t.hidden = true; }; }
     clearTimeout(toastTimer);
-    if (!actionLabel) toastTimer = setTimeout(() => { t.hidden = true; }, 3500);
+    toastTimer = setTimeout(() => { t.hidden = true; }, actionLabel ? 15000 : 3500);
   }
   const unitById = (id) => D.units.find((u) => u.id === id);
   const vocabById = (id) => D.vocab.find((v) => v.id === id);
@@ -660,6 +660,7 @@
         (D.settings.paperAllowed ? '<label class="check" style="margin-top:8px"><input type="checkbox" data-change="paper" ' + (D.settings.paperChosen ? 'checked' : '') + '> Ich schreibe auf Papier</label>' : '') + '</div>';
     }
     app.innerHTML =
+      (BETA ? '<div class="betabar">Testversion – eigener Speicher, die normale App bleibt unverändert.</div>' : '') +
       '<div class="topbar"><h1>' + ic('cup') + 'Teacup</h1><button class="iconbtn" data-act="parent" aria-label="Elternbereich">' + ic('gear') + (dot ? '<span class="badge-dot"></span>' : '') + '</button></div>' +
       '<div class="hero-city">' + SKYLINE + '<div class="hello"><b>Hello' + name + '!</b><span>Schön, dass du da bist.</span></div></div>' + turboCardHtml() + main + petCardHtml() + pathCardHtml() +
 focusCardHtml() +
@@ -1389,7 +1390,9 @@ focusCardHtml() +
     D.game = D.game || {};
     const g = D.game;
     g.stars = g.stars || 0; g.starsTotal = g.starsTotal || 0; g.dayStars = g.dayStars || {};
-    g.goalDays = g.goalDays || []; g.owned = g.owned || []; g.equipped = g.equipped || {}; g.album = g.album || {};
+    // Beim ersten Start: bisherige Tage mit erreichtem Tagesziel nachtragen (Begleiter wächst durch Lerntage)
+    if (!g.goalDays) g.goalDays = Object.keys(D.stats.days || {}).filter((d) => d < today() && (D.stats.days[d].ms || 0) >= D.settings.dailyMinutes * 60000).sort();
+    g.owned = g.owned || []; g.equipped = g.equipped || {}; g.album = g.album || {};
     g.chests = g.chests || { opened: 0, sinceNew: 0 }; g.badges = g.badges || {}; g.said = g.said || {}; g.games = g.games || {};
     g.records = g.records || {}; g.bossPaid = g.bossPaid || {};
     return g;
@@ -1526,7 +1529,7 @@ focusCardHtml() +
       '<button class="btn big" data-act="home">Weiter</button>';
   }
   function cardHtml(c, big) {
-    return '<div class="acard ' + c.r + (big ? ' big' : '') + '"><div class="aicon">' + c.icon + '</div><div class="aname">' + esc(c.name) + '</div><div class="arar">' + (c.r === 'golden' ? '★ golden' : c.r === 'selten' ? 'selten' : esc(c.cat)) + '</div>' +
+    return '<div class="acard ' + c.r + (big ? ' big' : '') + '"><div class="aicon">' + c.icon + '</div><div class="aname">' + esc(c.name) + '</div><div class="arar">' + (c.r === 'golden' ? '★ golden' : c.r === 'selten' ? 'selten' : 'normal') + '</div>' +
       (big ? '<p class="aen">' + esc(c.en) + '</p><p class="ade">' + esc(c.de) + '</p><button class="btn small secondary" data-act="say" data-text="' + esc(c.en) + '">' + ic('speaker') + 'Vorlesen</button>' : '') + '</div>';
   }
   function renderAlbum() {
@@ -2301,9 +2304,15 @@ focusCardHtml() +
   }
 
   // ---------- Sicherung ----------
+  function betaHtml() {
+    if (!BETA) return '';
+    const live = localStorage.getItem(LIVE_KEY);
+    return '<div class="card warn"><h3 style="margin-top:0">Testversion</h3><p class="small" style="margin-top:0">Diese Testversion hat einen eigenen Speicher. Beim ersten Öffnen wurde eine Kopie der Daten aus der normalen Teacup-App auf diesem Gerät übernommen. Die normale App wird nie verändert.</p>' +
+      (live ? '<button class="btn secondary" data-act="betareload">Daten der normalen App neu übernehmen</button><p class="small">Ersetzt den Stand der Testversion durch den aktuellen Stand der normalen App.</p>' : '<p class="small">Auf diesem Gerät gibt es keine normale Teacup-App mit Daten.</p>') + '</div>';
+  }
   function backupHtml() {
     const share = (kind, label) => '<div class="row"><button class="btn" data-act="sendfile" data-kind="' + kind + '">' + ic('share') + label + '</button><button class="btn secondary" data-act="savefile" data-kind="' + kind + '">' + ic('download') + 'Herunterladen</button></div>';
-    let h = '<div class="card soft"><p style="margin:0"><b>Zwei Geräte, ein Stand:</b> Vokabeln pflegen Sie auf Ihrem Handy und senden sie an Emmas Gerät. Emmas Lernstand senden Sie von ihrem Gerät an Ihr Handy, um dort Auswertung und Statistik zu sehen. Übertragen wird per Datei (z. B. WhatsApp, E-Mail, Drive, Quick Share).</p></div>' +
+    let h = betaHtml() + '<div class="card soft"><p style="margin:0"><b>Zwei Geräte, ein Stand:</b> Vokabeln pflegen Sie auf Ihrem Handy und senden sie an Emmas Gerät. Emmas Lernstand senden Sie von ihrem Gerät an Ihr Handy, um dort Auswertung und Statistik zu sehen. Übertragen wird per Datei (z. B. WhatsApp, E-Mail, Drive, Quick Share).</p></div>' +
       '<div class="card"><h3 style="margin-top:0">' + ic('book') + '1. Vokabeln an Emmas Gerät senden</h3><p class="small" style="margin-top:0">Nur Units und Vokabeln (inkl. Beispielsätze, Tipps, Markierung „neu“). Auf Emmas Gerät werden neue Wörter ergänzt und geänderte aktualisiert. <b>Ihr Lernstand bleibt erhalten.</b></p>' + share('vokabeln', 'Vokabeln senden …') + '</div>' +
       '<div class="card"><h3 style="margin-top:0">' + ic('star') + '2. Lernstand an Eltern senden</h3><p class="small" style="margin-top:0">Auf <b>Emmas Gerät</b> antippen. Auf Ihrem Handy sehen Sie danach Auswertung und Statistik. Ihre Vokabeln dort bleiben erhalten.</p>' + share('lernstand', 'Lernstand senden …') + '</div>' +
       '<div class="card"><h3 style="margin-top:0">' + ic('file') + '3. Empfangene Datei einspielen</h3><p class="small" style="margin-top:0">Die App erkennt selbst, ob es Vokabeln, ein Lernstand oder eine komplette Sicherung ist, und zeigt vorher an, was passiert.</p>' +
@@ -2523,6 +2532,7 @@ focusCardHtml() +
       rerender();
     },
     gtwister: () => { const gm = S.G; recReset(); gm.said++; gm.i++; if (gm.i >= gm.list.length) return finishGame(3); rerender(); },
+    betareload: () => { if (!confirm('Stand der Testversion durch die Daten der normalen App ersetzen?')) return; const raw = localStorage.getItem(LIVE_KEY); if (!raw) return; localStorage.setItem(STORE_KEY, raw); D = load(); S.unlocked = false; S.view = 'home'; render(); toast('Daten der normalen App übernommen.'); },
     openpath: () => { recReset(); S.view = 'path'; render(); },
     pathunit: (el) => { S.pathUnit = el.dataset.id; render(); },
     startlesson: (el) => startLesson(S.pathUnit, Number(el.dataset.idx)),
@@ -2746,17 +2756,19 @@ focusCardHtml() +
 
   // ---------- Updates (Service Worker) ----------
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    // Nur der eigene Service Worker zählt (die normale App und die Testversion liegen unter derselben Adresse)
+    const ownSW = () => { const c = navigator.serviceWorker.controller; return !!c && c.scriptURL === new URL('sw.js', location.href).href; };
     navigator.serviceWorker.register('sw.js').then((reg) => {
       const offer = (w) => toast('Neue Version verfügbar.', 'Aktualisieren', () => w.postMessage('skipWaiting'));
-      if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
+      if (reg.waiting && ownSW()) offer(reg.waiting);
       reg.addEventListener('updatefound', () => {
         const w = reg.installing;
-        w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) offer(w); });
+        w.addEventListener('statechange', () => { if (w.state === 'installed' && ownSW()) offer(w); });
       });
     }).catch(() => {});
     // Nur nach einem echten Update neu laden, nicht bei der allerersten Installation.
     let reloaded = false;
-    const hadController = !!navigator.serviceWorker.controller;
+    const hadController = ownSW();
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
   }
 
