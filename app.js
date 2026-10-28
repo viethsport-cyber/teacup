@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.0.3';
+  const APP_VERSION = '2.0.4';
   const STORE_KEY = 'teacup-data';
   const LIVE_KEY = 'teacup-data';
   const BETA = false;
@@ -2811,5 +2811,12 @@ focusCardHtml() +
 
   // Für die automatischen Tests
   window.__teacup = { gradeEn, matchDe, matchEnSpeech, trackWrite, weakCats, catsIn, data: () => D, version: APP_VERSION, syllables, buildLesson: (ids) => buildLesson(ids.map(vocabById)), stations, lesson: () => S.L && { i: S.L.i, n: S.L.tasks.length, t: S.L.tasks[S.L.i] }, todayStr: today, openChestForTest: () => { const v = S.view; openChest(); S.view = v; }, gapFor: (id) => gapFor(vocabById(id)), state: () => S };
+  // Einmalig nach dem Update auf 2.0.3: heute schon freiwillig Geübtes nachträglich in die Lernkartei übernehmen
+  if (!D.catchup203) {
+    const t = today(), skip = ['probe', 'boss', 'game'];
+    const ev = (D.sessions || []).filter((x) => !skip.includes(x.mode)).flatMap((x) => x.ev || []).filter((e) => e.d === 'de' && e.p === 1 && dateStr(new Date(e.t)) === t).sort((a, b) => a.t - b.t);
+    ev.forEach((e) => { if (vocabById(e.v) && canMove(e.v)) recordWrite(e.v, e.ok); });
+    D.catchup203 = t; save();
+  }
   render();
 })();
