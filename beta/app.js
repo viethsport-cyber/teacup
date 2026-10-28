@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.0.0-beta.3';
+  const APP_VERSION = '2.0.1-beta.1';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -1904,8 +1904,18 @@ focusCardHtml() +
       const u = b && D.units.find((x) => x.bookId === b.id && x.name.toLowerCase() === (rec.unit || '').toLowerCase());
       rec.existing = u ? D.vocab.find((v) => v.unitId === u.id && cmpEn(v.en).toLowerCase() === cmpEn(rec.en).toLowerCase()) : null;
       rec.newUnit = !u;
+      // Schon in einer anderen Unit vorhanden (z. B. von Karteikarten in „Sonstige Wörter“)?
+      if (!rec.existing && rec.en) { const o = findElsewhere(rec.en, u ? u.id : null); if (o) { const ou = D.units.find((x) => x.id === o.unitId); rec.elsewhere = o; rec.elsewhereUnit = ou ? ou.name : '?'; } }
       return rec;
     });
+  }
+  // Gleiches Wort, auch bei kleinen Unterschieden wie „to like“ / „like“ oder „Mum“ / „mum“
+  const wordKey = (s) => cmpEn(s).toLowerCase().replace(/^(to|a|an|the)\s+(?=\S)/, '').trim();
+  function findElsewhere(en, unitId) {
+    const k = wordKey(en), hits = D.vocab.filter((v) => v.unitId !== unitId && wordKey(v.en) === k);
+    if (!hits.length) return null;
+    const noU = D.units.filter((x) => x.name === NO_UNIT).map((x) => x.id);
+    return hits.find((v) => noU.includes(v.unitId)) || hits[0];
   }
   // Fehler zusammenfassen, mit konkretem Lösungshinweis
   function errorSummaryHtml(P) {
@@ -1941,15 +1951,18 @@ focusCardHtml() +
       '<div class="row" style="margin-top:10px"><button class="btn secondary" data-act="sample">20 Testwörter</button><button class="btn" data-act="preview">3. Vorschau</button></div></div>';
     if (S.preview) {
       const P = S.preview, ok = P.filter((r) => !r.errors.length && !r.dup), bad = P.filter((r) => r.errors.length).length, dup = P.filter((r) => r.dup && !r.errors.length).length;
-      const nNew = ok.filter((r) => !r.existing).length, nUpd = ok.length - nNew;
+      if (S.impMove === undefined) S.impMove = true;
+      const nEls = ok.filter((r) => !r.existing && r.elsewhere).length;
+      const nNew = ok.filter((r) => !r.existing && !(r.elsewhere && S.impMove)).length, nUpd = ok.length - nNew;
       const newUnits = [...new Set(ok.filter((r) => r.newUnit).map((r) => r.unit))];
       h += '<div class="card"><h3 style="margin-top:0">Vorschau</h3><p><b>' + nNew + '</b> neu · <b>' + nUpd + '</b> werden aktualisiert (Lernstand bleibt) · <b' + (bad ? ' style="color:var(--bad)"' : '') + '>' + bad + '</b> mit Fehler (werden übersprungen)' + (dup ? ' · <b>' + dup + '</b> doppelt' : '') + '</p>' +
         errorSummaryHtml(P) +
+        (nEls ? '<div class="card" style="box-shadow:none"><p style="margin-top:0"><b>' + nEls + '</b> Wörter gibt es schon in einer anderen Unit (z. B. von den Karteikarten).</p><label class="check" style="margin-bottom:0"><input type="checkbox" data-change="impmove"' + (S.impMove ? ' checked' : '') + '> In diese Unit verschieben und mit den neuen Angaben ergänzen, statt doppelt anzulegen. Emmas Lernstand bleibt.</label></div>' : '') +
         (newUnits.length ? '<p>Neue Units: ' + esc(newUnits.join(', ')) + '</p><label for="imp-status">Status der neuen Units</label><select id="imp-status">' + Object.entries(STATUS).map(([k, l]) => '<option value="' + k + '"' + (k === 'aktuell' ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' : '') +
         '<label class="check"><input type="checkbox" id="imp-tagnew" checked> Als <b>neue Vokabeln</b> markieren (Emma kann sie mit „Nur neue Vokabeln“ gezielt lernen)</label>' +
         (D.settings.autoApprove ? '<p class="small">Beispielsätze und Aussprachetipps sind sofort aktiv. Durchsehen und ändern: Reiter „Prüfen“.</p>' : '<label class="check"><input type="checkbox" id="imp-checked"> Beispielsätze und Aussprachetipps sind geprüft (sonst später unter „Prüfen“ freigeben)</label>') +
         '<div class="tablewrap"><table><thead><tr><th>#</th><th>Unit</th><th>S.</th><th>Englisch</th><th>Deutsch</th><th>Status</th></tr></thead><tbody>' +
-        P.map((r) => '<tr' + (r.errors.length ? ' class="err"' : '') + '><td>' + r.line + '</td><td>' + esc(r.unit) + '</td><td>' + esc(r.page) + '</td><td>' + esc(r.en) + '</td><td>' + esc(r.de.join(' / ')) + '</td><td>' + (r.errors.length ? esc(r.errors.join(', ')) : r.dup ? 'doppelt, wird übersprungen' : r.existing ? 'aktualisieren' : 'neu') + '</td></tr>').join('') +
+        P.map((r) => '<tr' + (r.errors.length ? ' class="err"' : '') + '><td>' + r.line + '</td><td>' + esc(r.unit) + '</td><td>' + esc(r.page) + '</td><td>' + esc(r.en) + '</td><td>' + esc(r.de.join(' / ')) + '</td><td>' + (r.errors.length ? esc(r.errors.join(', ')) : r.dup ? 'doppelt, wird übersprungen' : r.existing ? 'aktualisieren' : r.elsewhere ? (S.impMove ? 'schon in „' + esc(r.elsewhereUnit) + '“: wird verschoben' : 'auch in „' + esc(r.elsewhereUnit) + '“: neu angelegt') : 'neu') + '</td></tr>').join('') +
         '</tbody></table></div><div class="row" style="margin-top:12px"><button class="btn secondary" data-act="cancelimport">Verwerfen</button><button class="btn good" data-act="doimport"' + (ok.length ? '' : ' disabled') + '>' + ok.length + ' Wörter übernehmen</button></div></div>';
     }
     h += '<div class="card"><h3 style="margin-top:0">' + ic('pencil') + 'Karteikarten und Handschrift</h3>' +
@@ -2058,7 +2071,7 @@ focusCardHtml() +
     const auto = D.settings.autoApprove;
     const tagNew = !$('#imp-tagnew') || $('#imp-tagnew').checked;
     const checked = auto || !!($('#imp-checked') && $('#imp-checked').checked);
-    let lastUnit = null;
+    let lastUnit = null, moved = 0;
     for (const r of rows) {
       let b = D.books.find((x) => x.name.toLowerCase() === r.bookName.toLowerCase());
       if (!b) { b = { id: uid(), name: r.bookName }; D.books.push(b); }
@@ -2067,6 +2080,11 @@ focusCardHtml() +
       lastUnit = u;
       let v = D.vocab.find((x) => x.unitId === u.id && cmpEn(x.en).toLowerCase() === cmpEn(r.en).toLowerCase());
       const fields = { unitId: u.id, page: r.page, en: r.en, de: r.de, pos: r.pos, note: r.note, exEn: r.exEn, exDe: r.exDe, tip: r.tip };
+      if (!v && S.impMove !== false) {
+        // Aus anderer Unit herüberholen: Bedeutungen zusammenführen, Lernstand (Box, Verlauf) bleibt
+        v = findElsewhere(r.en, u.id);
+        if (v) { const low = r.de.map((d) => d.toLowerCase()); fields.de = r.de.concat((v.de || []).filter((d) => !low.includes(d.toLowerCase()))); moved++; }
+      }
       if (v) {
         // Vorhandenes Wort ergänzen: leere Felder im Import überschreiben nichts, der Lernstand bleibt
         const before = [v.exEn, v.exDe, v.tip].join('|');
@@ -2080,7 +2098,7 @@ focusCardHtml() +
       }
     }
     save();
-    toast(rows.length + ' Wörter übernommen.');
+    toast(rows.length + ' Wörter übernommen' + (moved ? ', davon ' + moved + ' aus anderen Units verschoben (Lernstand bleibt).' : '.'));
     S.preview = null; S.importText = ''; S.impUnit = lastUnit ? lastUnit.id : S.impUnit; S.impNewUnit = ''; S.tab = 'vocab'; S.unitId = lastUnit ? lastUnit.id : null; S.bookId = lastUnit ? lastUnit.bookId : S.bookId;
     render();
   }
@@ -2741,6 +2759,7 @@ focusCardHtml() +
     normalrate: (el) => { D.settings.normalRate = Number(el.value); save(); },
     enrunit: (el) => { S.enrichUnit = el.value; rerender(); },
     autoapprove: (el) => { D.settings.autoApprove = el.checked; save(); },
+    impmove: (el) => { S.impMove = el.checked; syncImportFields(); rerender(); },
     imppairs: (el) => { S.impPairs = el.checked; if (S.preview) { syncImportFields(); S.preview = parseImport(S.importText); rerender(); } },
     textfile: (el) => { if (el.files && el.files[0]) readTextFile(el.files[0]); el.value = ''; },
     photo: (el) => { if (el.files && el.files[0]) runOcr(el.files[0]); el.value = ''; }
