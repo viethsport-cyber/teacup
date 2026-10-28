@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.0.0-beta.2';
+  const APP_VERSION = '2.0.0-beta.3';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -961,6 +961,11 @@ focusCardHtml() +
     return h + '<button class="btn big" data-act="next">Weiter</button>';
   }
   function setDe(ok, answer) { const T = curTask(); T.deOk = ok; T.deAnswer = answer; logEvent('en', T, ok, answer, false); save(); if (S.R.exam) return; if (T.pass === 1 && ok) S.R.firstOk2++; beep(ok); if (ok) setTimeout(() => confetti(14), 60); }
+  // Hinweis, warum die Aussprache gerade nicht automatisch geprüft wird
+  function sayCheckOffHtml() {
+    const why = !SR ? 'Dieser Browser kann keine Sprache erkennen (bitte Chrome nutzen).' : !D.settings.speech ? 'Die Aussprache-Prüfung ist ausgeschaltet. Eltern können sie unter Einstellungen → Spracherkennung einschalten.' : !navigator.onLine ? 'Ohne Internet kann die Aussprache nicht geprüft werden.' : '';
+    return why ? '<p class="small center">' + ic('bulb') + ' ' + esc(why) + ' Bis dahin: anhören, aufnehmen, vergleichen.</p>' : '';
+  }
   function repeatHtml(T, v) {
     const u = T.ui; u.tries = u.tries || 0;
     let h = '<div class="card"><div class="prompt"><div class="label">' + (T.isNew ? 'Neues Wort: ' : T.sayFocus ? ic('target') + 'Aussprache üben: ' : 'Sprich es laut: ') + 'Hör zu und sprich nach.</div><div class="word' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div><div class="meta">' + esc(deText(v)) + '</div></div>' + speakBtns(v.en) + syllableHtml(v.en) + recordHtml(v.en);
@@ -976,7 +981,7 @@ focusCardHtml() +
       h += '</div>' + (fin ? '<button class="btn big" data-act="next">Weiter</button>' : '<button class="btn ghost" data-act="self-en">Ohne Mikrofon weiter</button>');
       return h;
     }
-    return h + '<p class="center">Sprich das Wort laut nach. Hör dir den Vergleich so oft an, wie du willst.</p></div><button class="btn big" data-act="next">✓ Nachgesprochen, weiter</button>';
+    return h + '<p class="center">Sprich das Wort laut nach. Hör dir den Vergleich so oft an, wie du willst.</p>' + (u.selfMode ? '' : sayCheckOffHtml()) + '</div><button class="btn big" data-act="next">✓ Nachgesprochen, weiter</button>';
   }
   const pick = (a) => a[Math.floor(Math.random() * a.length)];
   function onBossWon(unitId) {
@@ -1266,7 +1271,7 @@ focusCardHtml() +
         h += '<div class="center"><button class="mic' + (L.ui.listening ? ' listening' : '') + '" data-act="lmic" aria-label="Sprechen">' + ic('mic') + '</button><p>' + (L.ui.listening ? 'Ich höre zu …' : L.ui.level === 'nochmal' ? 'Das war noch nicht richtig. Hör genau hin und versuch es noch einmal.' : L.ui.level === 'fast' ? 'Fast! Noch einmal?' : 'Tippe aufs Mikrofon und lies vor.') + '</p></div>' +
           (L.ui.tries >= 2 ? '<div class="tip">' + ic('bulb') + esc(v.checked && v.tip ? v.tip : 'Hör genau hin: langsam vorsprechen lassen und Silbe für Silbe nachsprechen.') + '</div>' : '') + recordHtml(v.en) +
           '<button class="btn ghost" data-act="lselfspeak">Ohne Mikrofon weiter</button></div>';
-      } else h += recordHtml(v.en) + '<p class="center">Sprich das Wort laut. Vergleiche mit dem Original.</p><button class="btn big" data-act="lspoke">✓ Laut gesprochen</button></div>';
+      } else h += recordHtml(v.en) + '<p class="center">Sprich das Wort laut. Vergleiche mit dem Original.</p>' + (L.ui.selfMode ? '' : sayCheckOffHtml()) + '<button class="btn big" data-act="lspoke">✓ Laut gesprochen</button></div>';
     } else if (t.type === 'gap') {
       const g = gapFor(v);
       if (!g) { t.type = 'freewrite'; return renderLesson(); }
