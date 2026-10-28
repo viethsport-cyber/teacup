@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '1.8.1';
+  const APP_VERSION = '1.9.0';
   const STORE_KEY = 'teacup-data';
   const SAFETY_KEY = 'teacup-data-tagessicherung';
   const SCHEMA = 1;
@@ -665,9 +665,32 @@
       i: 0, part: 1, words: list.map((v) => v.id), total: list.length, doneWords: new Set(), done2: new Set(), firstOk2: 0, moves: {}, firstOk: 0, reported: new Set(), last: Date.now()
     };
     S.R.tasks.forEach((t) => (t.phase = 'write'));
+    S.R.session = newSession(S.R.mode); save();
     S.view = 'round'; render();
   }
-  function tick() { if (S.R) { const n = Date.now(); addLearnTime(n - S.R.last); S.R.last = n; } }
+  function tick() {
+    if (!S.R) return;
+    const n = Date.now(), d = Math.min(n - S.R.last, 90000);
+    addLearnTime(d); S.R.last = n;
+    if (S.R.session) { S.R.session.ms += d; S.R.session.end = new Date(n).toISOString(); }
+  }
+  // Lernzeiten-Protokoll: wann, wie lange, was geübt, was richtig/falsch (für die Statistik)
+  const MODE_NAME = { plan: 'Tagesplan', fresh: 'Neue Vokabeln', all: 'Alle Vokabeln', focus: 'Schwerpunkt', extra: 'Extra-Übung' };
+  function newSession(mode) {
+    D.sessions = D.sessions || [];
+    const now = new Date().toISOString();
+    const sess = { id: uid(), start: now, end: now, ms: 0, mode, ev: [] };
+    D.sessions.push(sess);
+    return sess;
+  }
+  function logEvent(dir, T, ok, answer, up) {
+    const v = vocabById(T.vid); if (!S.R || !S.R.session || !v) return;
+    S.R.session.ev.push({ v: T.vid, en: v.en, de: deText(v), d: dir, ok: !!ok, a: answer || '', p: T.pass, up: up ? 1 : 0, t: Date.now() });
+  }
+  function closeSession() {
+    if (!S.R || !S.R.session) return;
+    if (!S.R.session.ev.length) D.sessions = D.sessions.filter((x) => x !== S.R.session);
+  }
   const curTask = () => S.R.tasks[S.R.i];
   function nextPhase() {
     tick();
@@ -700,7 +723,7 @@
     }
     render();
   }
-  function endRound() { addLearnTime(0); D.stats.days[today()].rounds++; save(); S.view = 'summary'; render(); }
+  function endRound() { tick(); closeSession(); addLearnTime(0); D.stats.days[today()].rounds++; save(); S.view = 'summary'; render(); }
   function startPart2() {
     const R = S.R;
     R.part = 2; R.i = 0; R.total = R.words.length;
@@ -720,8 +743,9 @@
       if (ok) R.firstOk++;
       if (!T.noBox) R.moves[T.vid] = recordWrite(T.vid, ok);
       else if (R.mode === 'all') { D.allCycle = [...new Set([...(D.allCycle || []), T.vid])]; }
+      logEvent('de', T, ok, answer, !T.noBox && R.moves[T.vid] && R.moves[T.vid].after > R.moves[T.vid].before);
       if (!R.paper) { T.errCats = trackWrite(vocabById(T.vid), answer, grade); save(); }
-    }
+    } else { logEvent('de', T, ok, answer, false); save(); }
     beep(ok);
     if (ok) setTimeout(() => confetti(14), 60);
   }
@@ -826,7 +850,7 @@
     if (!T.deOk && T.deAnswer) h += '<button class="btn ghost" data-act="de-right">' + ic('flag') + 'Ich war richtig</button>';
     return h + '<button class="btn big" data-act="next">Weiter</button>';
   }
-  function setDe(ok, answer) { const T = curTask(); T.deOk = ok; T.deAnswer = answer; if (T.pass === 1 && ok) S.R.firstOk2++; beep(ok); if (ok) setTimeout(() => confetti(14), 60); }
+  function setDe(ok, answer) { const T = curTask(); T.deOk = ok; T.deAnswer = answer; logEvent('en', T, ok, answer, false); save(); if (T.pass === 1 && ok) S.R.firstOk2++; beep(ok); if (ok) setTimeout(() => confetti(14), 60); }
   function repeatHtml(T, v) {
     const u = T.ui; u.tries = u.tries || 0;
     let h = '<div class="card"><div class="prompt"><div class="label">' + (T.isNew ? 'Neues Wort: ' : ic('target') + 'Aussprache üben: ') + 'Hör zu und sprich nach.</div><div class="word' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div><div class="meta">' + esc(deText(v)) + '</div></div>' + speakBtns(v.en);
@@ -903,14 +927,15 @@
   // ---------- Elternbereich ----------
   function renderParent() {
     const nRev = openReports().length + D.vocab.filter((v) => needsReview(v) || v.reviewNew).length;
-    const tabs = [['vocab', 'Vokabeln'], ['import', 'Importieren'], ['review', 'Prüfen' + (nRev ? ' (' + nRev + ')' : '')], ['analysis', 'Auswertung'], ['settings', 'Einstellungen'], ['backup', 'Sicherung']];
+    const tabs = [['vocab', 'Vokabeln'], ['import', 'Importieren'], ['review', 'Prüfen' + (nRev ? ' (' + nRev + ')' : '')], ['analysis', 'Auswertung'], ['stats', 'Statistik'], ['settings', 'Einstellungen'], ['backup', 'Übertragen & Sicherung']];
     let h = '<div class="topbar"><button class="iconbtn" data-act="leave" aria-label="Elternbereich verlassen">' + ic('back') + '</button><h1>Elternbereich</h1></div>' +
       '<div class="tabs" role="tablist">' + tabs.map(([k, l]) => '<button role="tab" aria-selected="' + (S.tab === k) + '" data-act="tab" data-tab="' + k + '">' + esc(l) + '</button>').join('') + '</div>';
     if (backupDue() && S.tab !== 'backup') h += '<div class="card warn"><b>Erinnerung:</b> ' + (D.lastBackupAt ? 'Die letzte Sicherung ist über einen Monat her.' : 'Es gibt noch keine Sicherung.') + ' <button class="btn small" data-act="tab" data-tab="backup">Jetzt sichern</button></div>';
     if (S.tab === 'vocab') h += S.editId ? editHtml() : S.unitId ? unitHtml() : unitsHtml();
     if (S.tab === 'import') h += importHtml();
     if (S.tab === 'review') h += reviewHtml();
-    if (S.tab === 'analysis') h += analysisHtml();
+    if (S.tab === 'analysis') h += reportFromHtml() + analysisHtml();
+    if (S.tab === 'stats') h += reportFromHtml() + statsHtml();
     if (S.tab === 'settings') h += settingsHtml();
     if (S.tab === 'backup') h += backupHtml();
     app.innerHTML = h;
@@ -1284,6 +1309,95 @@
     save(); toast(yes ? 'Als richtig gewertet.' : 'Bleibt falsch.'); rerender();
   }
 
+  // ---------- Statistik: Lernzeiten, Uhrzeiten, Fehler, Zusammenfassung ----------
+  const WD = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+  const WDL = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'];
+  const dayOf = (iso) => dateStr(new Date(iso));
+  const hm = (iso) => { const d = new Date(iso); return pad(d.getHours()) + ':' + pad(d.getMinutes()); };
+  const wdOf = (ds) => { const [y, m, d] = ds.split('-').map(Number); return new Date(y, m - 1, d).getDay(); };
+  const sessionsOn = (ds) => (D.sessions || []).filter((x) => dayOf(x.start) === ds).sort((a, b) => (a.start < b.start ? -1 : 1));
+  const minutesOn = (ds) => { const ms = ((D.stats.days[ds] || {}).ms) || sessionsOn(ds).reduce((t, x) => t + x.ms, 0); return ms > 0 ? Math.max(1, Math.round(ms / 60000)) : 0; };
+  function reportFromHtml() {
+    return D.reportFrom ? '<div class="card soft" style="padding:12px 16px"><p class="small" style="margin:0">' + ic('download') + ' Stand von Emmas Gerät vom <b>' + fmtDate(D.reportFrom) + ', ' + hm(D.reportFrom) + ' Uhr</b>. Neuer Stand: auf Emmas Gerät „Lernstand an Eltern senden“.</p></div>' : '';
+  }
+  function barPath(x, y, w, h, r) { r = Math.min(r, h, w / 2); return 'M' + x + ' ' + (y + h) + 'V' + (y + r) + 'Q' + x + ' ' + y + ' ' + (x + r) + ' ' + y + 'H' + (x + w - r) + 'Q' + (x + w) + ' ' + y + ' ' + (x + w) + ' ' + (y + r) + 'V' + (y + h) + 'Z'; }
+  function statsHtml() {
+    const N = 14, t = today();
+    const days = Array.from({ length: N }, (_, i) => addDays(t, i - N + 1));
+    if (!S.statDay || !days.includes(S.statDay)) S.statDay = [...days].reverse().find((d) => minutesOn(d) > 0) || t;
+    const mins = days.map(minutesOn), goal = D.settings.dailyMinutes;
+    const max = Math.max(goal, ...mins, 5);
+    const W = 340, H = 150, top = 18, base = 118, colW = W / N, bw = 14;
+    const y = (m) => base - (m / max) * (base - top);
+    let svg = '<svg class="statchart" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Lernminuten der letzten 14 Tage">';
+    svg += '<line x1="0" x2="' + W + '" y1="' + base + '" y2="' + base + '" class="st-axis"/>';
+    svg += '<line x1="0" x2="' + W + '" y1="' + y(goal).toFixed(1) + '" y2="' + y(goal).toFixed(1) + '" class="st-goal"/><text x="2" y="' + (y(goal) - 4).toFixed(1) + '" class="st-goaltxt" text-anchor="start">Ziel ' + goal + ' Min.</text>';
+    days.forEach((d, i) => {
+      const x = i * colW + (colW - bw) / 2, m = mins[i], sel = d === S.statDay;
+      if (m > 0) svg += '<path d="' + barPath(x, y(m), bw, base - y(m), 4) + '" class="st-bar' + (sel ? ' sel' : '') + '"/>';
+      if (sel && m > 0) svg += '<text x="' + (x + bw / 2) + '" y="' + (y(m) - 5).toFixed(1) + '" class="st-val" text-anchor="middle">' + m + '</text>';
+      svg += '<text x="' + (x + bw / 2) + '" y="' + (base + 15) + '" class="st-lbl' + (sel ? ' sel' : '') + '" text-anchor="middle">' + WD[wdOf(d)] + '</text><text x="' + (x + bw / 2) + '" y="' + (base + 29) + '" class="st-lbl" text-anchor="middle">' + Number(d.slice(8)) + '.</text>';
+      svg += '<rect x="' + (i * colW) + '" y="0" width="' + colW + '" height="' + H + '" class="st-hit" data-act="statday" data-day="' + d + '"><title>' + WD[wdOf(d)] + ' ' + fmtDate(d).slice(0, 6) + ': ' + m + ' Min.</title></rect>';
+    });
+    svg += '</svg>';
+    const total = mins.reduce((a, b) => a + b, 0), active = mins.filter((m) => m > 0).length;
+    let h = '<div class="card"><h3 style="margin-top:0">' + ic('book') + 'Lernzeit der letzten 14 Tage</h3><p class="small" style="margin-top:0">' + total + ' Min. an ' + active + ' Tagen · Tippen Sie auf einen Tag für Details.</p>' + svg + '</div>';
+    h += dayDetailHtml(S.statDay) + summaryCardHtml();
+    return h;
+  }
+  function evStats(ev) {
+    const first = ev.filter((e) => e.p === 1);
+    const de = first.filter((e) => e.d === 'de'), en = first.filter((e) => e.d === 'en');
+    return { de: de.length, deOk: de.filter((e) => e.ok).length, en: en.length, enOk: en.filter((e) => e.ok).length, wrong: first.filter((e) => !e.ok), right: first.filter((e) => e.ok), up: de.filter((e) => e.up).length };
+  }
+  const evLine = (e) => '<li><span class="grow">' + (e.d === 'de' ? '<span class="de">' + esc(e.de) + ' →</span> <span class="en">' + esc(e.en) + '</span>' : '<span class="en">' + esc(e.en) + '</span> <span class="de">→ ' + esc(e.de) + '</span>') +
+    (!e.ok ? '<br><span class="small">Emma: „' + esc(e.a || '– weiß ich nicht –') + '“</span>' : '') + '</span><span class="pill">' + (e.d === 'de' ? 'DE→EN' : 'EN→DE') + '</span></li>';
+  function dayDetailHtml(ds) {
+    const ss = sessionsOn(ds), m = minutesOn(ds);
+    let h = '<div class="card"><h3 style="margin-top:0">' + WDL[wdOf(ds)] + ', ' + fmtDate(ds) + '</h3>';
+    if (!ss.length) return h + '<p class="muted">' + (m ? m + ' Min. gelernt (Einzelheiten werden erst ab Version 1.9 aufgezeichnet).' : 'An diesem Tag wurde nicht gelernt.') + '</p></div>';
+    const all = ss.flatMap((x) => x.ev), st = evStats(all);
+    h += '<p style="margin-top:0"><b>' + m + ' Min.</b> in ' + ss.length + (ss.length === 1 ? ' Runde' : ' Runden') + ' · Deutsch → Englisch: <b>' + st.deOk + ' von ' + st.de + '</b> richtig' + (st.en ? ' · Englisch → Deutsch: <b>' + st.enOk + ' von ' + st.en + '</b>' : '') + (st.up ? ' · ' + st.up + ' Wörter ein Fach weiter' : '') + '</p>';
+    h += ss.map((x) => {
+      const e = evStats(x.ev);
+      return '<details class="sess"><summary><span class="grow"><b>' + hm(x.start) + '–' + hm(x.end) + ' Uhr</b> · ' + Math.max(1, Math.round(x.ms / 60000)) + ' Min. · ' + esc(MODE_NAME[x.mode] || x.mode) + '</span><span class="pill ' + (e.wrong.length ? 'warn' : 'good') + '">' + e.right.length + ' ✓ · ' + e.wrong.length + ' ✗</span></summary>' +
+        (e.wrong.length ? '<p class="small" style="margin-bottom:0"><b>Fehler</b></p><ul class="list">' + e.wrong.map(evLine).join('') + '</ul>' : '<p class="small">Keine Fehler. ' + ic('star') + '</p>') +
+        (e.right.length ? '<p class="small" style="margin-bottom:0"><b>Richtig</b></p><ul class="list">' + e.right.map(evLine).join('') + '</ul>' : '') + '</details>';
+    }).join('');
+    return h + '</div>';
+  }
+  // Wochenzusammenfassung als Text (regelbasiert, ohne KI)
+  function weekSummary() {
+    const t = today(), days = Array.from({ length: 7 }, (_, i) => addDays(t, i - 6));
+    const ss = (D.sessions || []).filter((x) => days.includes(dayOf(x.start)));
+    const mins = days.reduce((a, d) => a + minutesOn(d), 0), act = days.filter((d) => minutesOn(d) > 0);
+    const st = evStats(ss.flatMap((x) => x.ev));
+    const name = D.settings.nickname || 'Emma';
+    const lines = ['Teacup – Wochenbericht ' + fmtDate(days[0]) + ' bis ' + fmtDate(t), ''];
+    lines.push('Lernzeit: ' + mins + ' Min. an ' + act.length + ' von 7 Tagen' + (act.length ? ' (Ø ' + Math.round(mins / act.length) + ' Min. pro Lerntag, Tagesziel ' + D.settings.dailyMinutes + ' Min.)' : '') + '.');
+    if (act.length) lines.push('Gelernt am: ' + act.map((d) => WD[wdOf(d)] + ' ' + minutesOn(d) + ' Min.').join(', ') + '.');
+    if (st.de) lines.push('Deutsch → Englisch (schriftlich): ' + st.deOk + ' von ' + st.de + ' beim ersten Versuch richtig (' + Math.round((st.deOk / st.de) * 100) + ' %).');
+    if (st.en) lines.push('Englisch → Deutsch: ' + st.enOk + ' von ' + st.en + ' richtig (' + Math.round((st.enOk / st.en) * 100) + ' %).');
+    if (st.up) lines.push(st.up + ' Wörter sind ein Fach weiter gekommen.');
+    const cnt = {}; st.wrong.forEach((e) => { const k = e.en; cnt[k] = cnt[k] || { n: 0, a: [] }; cnt[k].n++; if (e.a && !cnt[k].a.includes(e.a)) cnt[k].a.push(e.a); });
+    const top = Object.entries(cnt).sort((a, b) => b[1].n - a[1].n).slice(0, 5);
+    if (top.length) lines.push('', 'Häufigste Fehler:', ...top.map(([en, c]) => '- ' + en + ' (' + c.n + '×' + (c.a.length ? ', geschrieben: ' + c.a.slice(0, 2).join(' / ') : '') + ')'));
+    const weak = weakCats().slice(0, 3);
+    if (weak.length) lines.push('', 'Schwerpunkte zum Üben: ' + weak.map((w) => w.cat.label).join(', ') + '.');
+    const c = boxCounts(true);
+    lines.push('', 'Lernkartei jetzt: Fach 1: ' + c[1] + ', Fach 2: ' + c[2] + ', Fach 3: ' + c[3] + ', Fach 4: ' + c[4] + ', Fach 5: ' + c[5] + ', sitzt: ' + c[6] + '.');
+    if (!ss.length && !mins) lines.push('', 'In dieser Woche wurde noch nicht gelernt.');
+    else if (st.de && st.deOk / st.de >= 0.85) lines.push('', 'Fazit: ' + name + ' ist sehr sicher – weiter so.');
+    else if (st.de && st.deOk / st.de >= 0.6) lines.push('', 'Fazit: Gute Woche. Die Fehlerwörter oben lohnen eine kurze Extra-Übung.');
+    else if (st.de) lines.push('', 'Fazit: Noch einige Unsicherheiten. Kürzer, dafür täglich üben hilft am meisten.');
+    return lines.join('\n');
+  }
+  function summaryCardHtml() {
+    return '<div class="card"><h3 style="margin-top:0">' + ic('file') + 'Wochenzusammenfassung</h3>' +
+      (S.showSummary ? '<pre class="summary">' + esc(weekSummary()) + '</pre><div class="row"><button class="btn secondary" data-act="copysummary">' + ic('clip') + 'Kopieren</button>' + (navigator.share ? '<button class="btn secondary" data-act="sharesummary">' + ic('share') + 'Teilen …</button>' : '') + '</div>'
+        : '<p class="small" style="margin-top:0">Lernzeit, Trefferquote, häufigste Fehler und Schwerpunkte der letzten 7 Tage.</p><button class="btn" data-act="showsummary">Zusammenfassung anzeigen</button>') + '</div>';
+  }
+
   // ---------- Auswertung ----------
   const pct = (r) => (r === null ? '–' : Math.round(r * 100) + ' %');
   function analysisHtml() {
@@ -1352,18 +1466,17 @@
 
   // ---------- Sicherung ----------
   function backupHtml() {
-    let h = '<div class="card"><h3 style="margin-top:0">Sicherung speichern</h3><p>Letzte Sicherung: <b>' + (D.lastBackupAt ? fmtDate(D.lastBackupAt) : 'noch keine') + '</b></p>' +
+    const share = (kind, label) => '<div class="row"><button class="btn" data-act="sendfile" data-kind="' + kind + '">' + ic('share') + label + '</button><button class="btn secondary" data-act="savefile" data-kind="' + kind + '">' + ic('download') + 'Herunterladen</button></div>';
+    let h = '<div class="card soft"><p style="margin:0"><b>Zwei Geräte, ein Stand:</b> Vokabeln pflegen Sie auf Ihrem Handy und senden sie an Emmas Gerät. Emmas Lernstand senden Sie von ihrem Gerät an Ihr Handy, um dort Auswertung und Statistik zu sehen. Übertragen wird per Datei (z. B. WhatsApp, E-Mail, Drive, Quick Share).</p></div>' +
+      '<div class="card"><h3 style="margin-top:0">' + ic('book') + '1. Vokabeln an Emmas Gerät senden</h3><p class="small" style="margin-top:0">Nur Units und Vokabeln (inkl. Beispielsätze, Tipps, Markierung „neu“). Auf Emmas Gerät werden neue Wörter ergänzt und geänderte aktualisiert. <b>Ihr Lernstand bleibt erhalten.</b></p>' + share('vokabeln', 'Vokabeln senden …') + '</div>' +
+      '<div class="card"><h3 style="margin-top:0">' + ic('star') + '2. Lernstand an Eltern senden</h3><p class="small" style="margin-top:0">Auf <b>Emmas Gerät</b> antippen. Auf Ihrem Handy sehen Sie danach Auswertung und Statistik. Ihre Vokabeln dort bleiben erhalten.</p>' + share('lernstand', 'Lernstand senden …') + '</div>' +
+      '<div class="card"><h3 style="margin-top:0">' + ic('file') + '3. Empfangene Datei einspielen</h3><p class="small" style="margin-top:0">Die App erkennt selbst, ob es Vokabeln, ein Lernstand oder eine komplette Sicherung ist, und zeigt vorher an, was passiert.</p>' +
+      '<label class="btn secondary" style="margin:0">' + ic('file') + 'Datei auswählen<input type="file" id="bfile" data-change="bfile" accept=".json,application/json,application/octet-stream,text/plain" hidden></label>' + incomingHtml() + '</div>';
+    h += '<div class="card"><h3 style="margin-top:0">Komplette Sicherung</h3><p>Letzte Sicherung: <b>' + (D.lastBackupAt ? fmtDate(D.lastBackupAt) : 'noch keine') + '</b></p>' +
       '<p class="small">Die Datei enthält alle Vokabeln, den Lernstand und die Einstellungen. Bitte einmal im Monat sichern und die Datei z. B. per E-Mail an sich selbst schicken oder in Google Drive ablegen.</p>' +
-      '<div class="row"><button class="btn" data-act="export">' + ic('download') + 'Sicherung herunterladen</button>' + (navigator.canShare ? '<button class="btn secondary" data-act="share">' + ic('share') + 'Teilen …</button>' : '') + '</div></div>' +
-      '<div class="card"><h3 style="margin-top:0">Sicherung einspielen</h3><p class="small">Zum Beispiel auf einem zweiten Gerät. Achtung: Der Stand auf diesem Gerät wird dabei ersetzt. Die PIN der Sicherung gilt danach.</p>' +
-      '<label class="btn secondary" style="margin:0">' + ic('file') + 'Sicherungsdatei auswählen<input type="file" id="bfile" data-change="bfile" accept=".json,application/json,application/octet-stream,text/plain" hidden></label>' +
-      '<p class="small">Öffnet die Dateiauswahl (z. B. „Downloads“, „Dateien“ oder „Drive“). Die Datei heißt <i>teacup-sicherung-Datum.json</i>.</p>';
-    if (S.backupFile) {
-      const b = S.backupFile.data;
-      h += '<div class="card soft"><p>Sicherung vom <b>' + fmtDate(S.backupFile.exportedAt) + '</b>: ' + b.vocab.length + ' Wörter in ' + b.units.length + ' Units, ' + Object.values(b.progress || {}).filter((p) => p.seen).length + ' schon gelernt.</p>' +
-        '<button class="btn good" data-act="restore">Diese Sicherung einspielen</button> <button class="btn secondary" data-act="cancelrestore">Abbrechen</button></div>';
-    }
-    return h + '</div>';
+      '<div class="row"><button class="btn" data-act="export">' + ic('download') + 'Sicherung herunterladen</button>' + (navigator.canShare ? '<button class="btn secondary" data-act="share">' + ic('share') + 'Teilen …</button>' : '') + '</div><p class="small">Eine komplette Sicherung spielen Sie ebenfalls über „3. Empfangene Datei einspielen“ ein. Sie ersetzt dann alles auf dem Gerät.</p></div>' +
+      '';
+    return h;
   }
   function backupBlob() {
     const payload = { app: 'teacup', kind: 'sicherung', version: APP_VERSION, schema: SCHEMA, exportedAt: new Date().toISOString(), data: D };
@@ -1387,11 +1500,84 @@
     fr.onload = () => {
       try {
         const o = JSON.parse(fr.result);
-        if (o.app !== 'teacup' || !o.data || !Array.isArray(o.data.vocab) || !Array.isArray(o.data.units)) throw new Error('format');
+        const ok = o.app === 'teacup' && ((o.kind === 'sicherung' && o.data && Array.isArray(o.data.vocab)) || (o.kind === 'vokabeln' && Array.isArray(o.vocab)) || (o.kind === 'lernstand' && o.progress));
+        if (!ok) throw new Error('format');
         S.backupFile = o; rerender();
-      } catch (e) { S.backupFile = null; toast('Das ist keine gültige Teacup-Sicherung.'); }
+      } catch (e) { S.backupFile = null; toast('Das ist keine gültige Teacup-Datei.'); }
     };
     fr.readAsText(file);
+  }
+  // ---------- Übertragen zwischen Geräten ----------
+  function packVokabeln() { return { app: 'teacup', kind: 'vokabeln', version: APP_VERSION, exportedAt: new Date().toISOString(), books: D.books, units: D.units, vocab: D.vocab, customCats: D.customCats || [] }; }
+  function packLernstand() { return { app: 'teacup', kind: 'lernstand', version: APP_VERSION, exportedAt: new Date().toISOString(), books: D.books, units: D.units, vocab: D.vocab, progress: D.progress, stats: D.stats, sessions: D.sessions || [], skills: D.skills, reports: D.reports, newByDay: D.newByDay, allCycle: D.allCycle || [] }; }
+  const FILE_NAMES = { vokabeln: 'teacup-vokabeln-', lernstand: 'teacup-lernstand-' };
+  async function sendPack(kind, download) {
+    const obj = kind === 'vokabeln' ? packVokabeln() : packLernstand();
+    const name = FILE_NAMES[kind] + today() + '.json';
+    const blob = new Blob([JSON.stringify(obj)], { type: 'application/json' });
+    if (!download && navigator.canShare) {
+      const file = new File([blob], name, { type: 'application/json' });
+      if (navigator.canShare({ files: [file] })) { try { await navigator.share({ files: [file], title: 'Teacup' }); } catch (e) { /* abgebrochen */ } return; }
+    }
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000); toast('Gespeichert (Ordner „Downloads“).');
+  }
+  // Vokabeln zusammenführen: neue ergänzen, geänderte aktualisieren, Lernstand nie anfassen
+  function mergeVokabeln(pkg, dry) {
+    const res = { added: 0, updated: 0, same: 0, units: 0 };
+    const T = dry ? JSON.parse(JSON.stringify({ books: D.books, units: D.units, vocab: D.vocab })) : D;
+    const bookName = {}; (pkg.books || []).forEach((b) => { bookName[b.id] = b.name; });
+    const unitMap = {};
+    (pkg.units || []).forEach((pu) => {
+      const bn = bookName[pu.bookId] || 'Green Line 1';
+      let b = T.books.find((x) => x.name.toLowerCase() === bn.toLowerCase());
+      if (!b) { b = { id: T.books.some((x) => x.id === pu.bookId) ? uid() : pu.bookId, name: bn }; T.books.push(b); }
+      let u = T.units.find((x) => x.id === pu.id) || T.units.find((x) => x.bookId === b.id && x.name.toLowerCase() === pu.name.toLowerCase());
+      if (!u) { u = { id: T.units.some((x) => x.id === pu.id) ? uid() : pu.id, bookId: b.id, name: pu.name, status: pu.status, order: pu.order }; T.units.push(u); res.units++; }
+      else { u.name = pu.name; u.status = pu.status; }
+      unitMap[pu.id] = u.id;
+    });
+    const FIELDS = ['page', 'en', 'de', 'pos', 'note', 'exEn', 'exDe', 'tip', 'tipAuto', 'checked', 'altEn', 'reviewNew'];
+    (pkg.vocab || []).forEach((pv) => {
+      const unitId = unitMap[pv.unitId]; if (!unitId) return;
+      let v = T.vocab.find((x) => x.id === pv.id) || T.vocab.find((x) => x.unitId === unitId && cmpEn(x.en).toLowerCase() === cmpEn(pv.en).toLowerCase());
+      if (!v) { const nv = JSON.parse(JSON.stringify(pv)); nv.unitId = unitId; if (T.vocab.some((x) => x.id === nv.id)) nv.id = uid(); T.vocab.push(nv); res.added++; return; }
+      const before = JSON.stringify([v.unitId, ...FIELDS.map((f) => v[f]), v.homework]);
+      v.unitId = unitId; FIELDS.forEach((f) => { if (pv[f] !== undefined) v[f] = JSON.parse(JSON.stringify(pv[f])); });
+      const p = D.progress[v.id];
+      v.homework = !!pv.homework && !(p && p.seen && p.box >= 3);
+      if (before !== JSON.stringify([v.unitId, ...FIELDS.map((f) => v[f]), v.homework])) res.updated++; else res.same++;
+    });
+    if (!dry) {
+      (pkg.customCats || []).forEach((c) => { if (!(D.customCats || []).some((x) => x.text === c.text)) { D.customCats.push(c); D.focusMode[c.id] = 'on'; } });
+      save();
+    }
+    return res;
+  }
+  // Lernstand von Emmas Gerät übernehmen: Fortschritt, Zeiten, Fehler; eigene Vokabeln bleiben
+  function applyLernstand(pkg) {
+    const added = mergeVokabeln({ books: pkg.books, units: pkg.units, vocab: (pkg.vocab || []).filter((pv) => !D.vocab.some((x) => x.id === pv.id)) }, false).added;
+    D.progress = pkg.progress || {}; D.stats = Object.assign({ days: {} }, pkg.stats || {}); D.sessions = pkg.sessions || [];
+    D.skills = pkg.skills || {}; D.reports = pkg.reports || []; D.newByDay = pkg.newByDay || {}; D.allCycle = pkg.allCycle || [];
+    D.reportFrom = pkg.exportedAt; save();
+    return added;
+  }
+  function incomingHtml() {
+    const f = S.backupFile; if (!f) return '';
+    const when = fmtDate(f.exportedAt) + ', ' + hm(f.exportedAt) + ' Uhr';
+    if (f.kind === 'vokabeln') {
+      const r = mergeVokabeln(f, true);
+      return '<div class="card soft"><p><b>Vokabeln</b> vom ' + when + ': ' + f.vocab.length + ' Wörter.<br>Auf diesem Gerät: <b>' + r.added + '</b> neu · <b>' + r.updated + '</b> geändert · ' + r.same + ' unverändert' + (r.units ? ' · ' + r.units + ' neue Units' : '') + '.</p><p class="small">Der Lernstand auf diesem Gerät bleibt vollständig erhalten.</p>' +
+        '<button class="btn good" data-act="applyvok">Vokabeln übernehmen</button> <button class="btn secondary" data-act="cancelrestore">Abbrechen</button></div>';
+    }
+    if (f.kind === 'lernstand') {
+      const ss = f.sessions || [], last = ss.length ? ss[ss.length - 1].end : null;
+      return '<div class="card soft"><p><b>Lernstand von Emmas Gerät</b> vom ' + when + ': ' + Object.values(f.progress).filter((p) => p.seen).length + ' gelernte Wörter, ' + ss.length + ' Lernrunden' + (last ? ', zuletzt gelernt am ' + fmtDate(last) + ' um ' + hm(last) + ' Uhr' : '') + '.</p><p class="small">Ersetzt auf diesem Gerät nur Lernstand, Lernzeiten und Auswertung. Ihre Vokabeln bleiben; Wörter, die nur auf Emmas Gerät existieren, werden ergänzt.</p>' +
+        '<button class="btn good" data-act="applyls">Lernstand übernehmen</button> <button class="btn secondary" data-act="cancelrestore">Abbrechen</button></div>';
+    }
+    const b = f.data;
+    return '<div class="card warn"><p><b>Komplette Sicherung</b> vom ' + when + ': ' + b.vocab.length + ' Wörter in ' + b.units.length + ' Units, ' + Object.values(b.progress || {}).filter((p) => p.seen).length + ' schon gelernt.</p><p class="small"><b>Ersetzt alles</b> auf diesem Gerät, auch den Lernstand. Danach gilt die PIN aus der Sicherung.</p>' +
+      '<button class="btn good" data-act="restore">Sicherung einspielen</button> <button class="btn secondary" data-act="cancelrestore">Abbrechen</button></div>';
   }
   function restore() {
     try { localStorage.setItem('teacup-data-vor-einspielen', JSON.stringify(D)); } catch (e) { /* */ }
@@ -1411,7 +1597,7 @@
     startfresh: () => startRound(false, null, 'fresh'),
     startall: () => startRound(false, null, 'all'),
     focus: (el) => startRound(false, el.dataset.id),
-    quit: () => { tick(); save(); S.R = null; S.view = 'home'; render(); toast('Runde beendet. Dein Fortschritt ist gespeichert.'); },
+    quit: () => { tick(); closeSession(); save(); S.R = null; S.view = 'home'; render(); toast('Runde beendet. Dein Fortschritt ist gespeichert.'); },
     say: (el) => speak(el.dataset.text, false),
     sayslow: (el) => speak(el.dataset.text, true),
     check: () => {
@@ -1534,6 +1720,14 @@
     share: () => doShare(),
     restore: () => { if (confirm('Den aktuellen Stand auf diesem Gerät durch die Sicherung ersetzen?')) restore(); },
     cancelrestore: () => { S.backupFile = null; rerender(); },
+    sendfile: (el) => sendPack(el.dataset.kind, false),
+    savefile: (el) => sendPack(el.dataset.kind, true),
+    applyvok: () => { const r = mergeVokabeln(S.backupFile, false); S.backupFile = null; toast(r.added + ' neue und ' + r.updated + ' geänderte Vokabeln übernommen. Lernstand unverändert.'); rerender(); },
+    applyls: () => { if (!confirm('Lernstand von Emmas Gerät übernehmen? Der Lernstand auf DIESEM Gerät wird ersetzt.')) return; const n = applyLernstand(S.backupFile); S.backupFile = null; S.tab = 'stats'; toast('Lernstand übernommen' + (n ? ', ' + n + ' Wörter ergänzt' : '') + '.'); render(); },
+    statday: (el) => { S.statDay = el.dataset.day; rerender(); },
+    showsummary: () => { S.showSummary = true; rerender(); },
+    copysummary: async () => { try { await navigator.clipboard.writeText(weekSummary()); toast('Kopiert.'); } catch (e) { toast('Kopieren nicht möglich.'); } },
+    sharesummary: async () => { try { await navigator.share({ title: 'Teacup – Wochenbericht', text: weekSummary() }); } catch (e) { /* abgebrochen */ } },
     addcat: () => {
       const text = normEn($('#newcat').value); if (!text) return;
       if (allCats().some((c) => c.custom && c.label === '„' + text + '“')) return toast('Gibt es schon.');
@@ -1594,6 +1788,9 @@
     const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController && !reloaded) { reloaded = true; location.reload(); } });
   }
+
+  // Lernzeiten-Protokoll auf 180 Tage begrenzen
+  if (D.sessions && D.sessions.length) { const cut = new Date(Date.now() - 180 * 864e5).toISOString(); D.sessions = D.sessions.filter((x) => x.start >= cut); }
 
   // Einmalig: Aussprachetipps für vorhandene Wörter ergänzen (ändert nichts, wo schon ein Tipp steht)
   if (!D.autoTipsV1) { D.vocab.forEach((v) => { if (!v.tip) { v.tip = autoTip(v.en); v.tipAuto = !!v.tip; if (v.tip && !v.exEn && !v.exDe) v.checked = true; } }); D.autoTipsV1 = true; save(); }

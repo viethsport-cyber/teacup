@@ -225,3 +225,21 @@ tr.err td { background: var(--bad-soft); }
 .tip .ic { color: var(--pink); margin-top: 2px; }
 
 @media (min-width: 700px) and (orientation: landscape) { #app { max-width: 920px; } .hero-city { height: 200px; } }
+
+/* Statistik: ein Balken pro Tag (eine Datenreihe, daher keine Legende) */
+.statchart { width: 100%; height: auto; display: block; margin-top: 4px; }
+.st-axis { stroke: var(--line); stroke-width: 1; }
+.st-goal { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 4 4; opacity: .7; }
+.st-goaltxt { font-size: 10px; fill: var(--muted); font-weight: 600; }
+.st-bar { fill: var(--primary); opacity: .45; }
+.st-bar.sel { opacity: 1; }
+.st-val { font-size: 11px; font-weight: 800; fill: var(--text); }
+.st-lbl { font-size: 10px; fill: var(--muted); font-weight: 600; }
+.st-lbl.sel { fill: var(--text); font-weight: 800; }
+.st-hit { fill: transparent; cursor: pointer; }
+.st-hit:hover + .st-hit, .st-hit:focus { outline: none; }
+details.sess { border-top: 2px solid var(--line); padding: 6px 0; }
+details.sess summary { display: flex; gap: 8px; align-items: center; list-style: none; }
+details.sess summary::-webkit-details-marker { display: none; }
+details.sess[open] summary { margin-bottom: 4px; }
+pre.summary { white-space: pre-wrap; font: inherit; font-size: 16px; background: var(--bg); border-radius: 12px; padding: 12px; margin: 0 0 12px; }
