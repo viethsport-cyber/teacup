@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '1.8.0';
+  const APP_VERSION = '1.8.1';
   const STORE_KEY = 'teacup-data';
   const SAFETY_KEY = 'teacup-data-tagessicherung';
   const SCHEMA = 1;
@@ -1356,7 +1356,8 @@
       '<p class="small">Die Datei enthält alle Vokabeln, den Lernstand und die Einstellungen. Bitte einmal im Monat sichern und die Datei z. B. per E-Mail an sich selbst schicken oder in Google Drive ablegen.</p>' +
       '<div class="row"><button class="btn" data-act="export">' + ic('download') + 'Sicherung herunterladen</button>' + (navigator.canShare ? '<button class="btn secondary" data-act="share">' + ic('share') + 'Teilen …</button>' : '') + '</div></div>' +
       '<div class="card"><h3 style="margin-top:0">Sicherung einspielen</h3><p class="small">Zum Beispiel auf einem zweiten Gerät. Achtung: Der Stand auf diesem Gerät wird dabei ersetzt. Die PIN der Sicherung gilt danach.</p>' +
-      '<input type="file" id="bfile" data-change="bfile" style="font-size:16px;min-height:48px">';
+      '<label class="btn secondary" style="margin:0">' + ic('file') + 'Sicherungsdatei auswählen<input type="file" id="bfile" data-change="bfile" accept=".json,application/json,application/octet-stream,text/plain" hidden></label>' +
+      '<p class="small">Öffnet die Dateiauswahl (z. B. „Downloads“, „Dateien“ oder „Drive“). Die Datei heißt <i>teacup-sicherung-Datum.json</i>.</p>';
     if (S.backupFile) {
       const b = S.backupFile.data;
       h += '<div class="card soft"><p>Sicherung vom <b>' + fmtDate(S.backupFile.exportedAt) + '</b>: ' + b.vocab.length + ' Wörter in ' + b.units.length + ' Units, ' + Object.values(b.progress || {}).filter((p) => p.seen).length + ' schon gelernt.</p>' +
