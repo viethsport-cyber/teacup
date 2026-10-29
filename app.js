@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.0.4';
+  const APP_VERSION = '2.0.5';
   const STORE_KEY = 'teacup-data';
   const LIVE_KEY = 'teacup-data';
   const BETA = false;
@@ -1402,10 +1402,9 @@ focusCardHtml() +
     return g;
   }
   const goalReachedToday = () => G().goalDays.includes(today());
-  // Sterne vergeben – über 30 Minuten Lernzeit am Tag gibt es keine Zusatzbelohnung (Leitplanke 2)
+  // Sterne vergeben – fürs Lernen ohne Zeitgrenze (je Wort höchstens einmal am Tag), Minispiele bleiben begrenzt (Leitplanke 2)
   function award(n, why) {
     const g = G(); if (!n) return 0;
-    if (why !== 'goal' && minutesToday() > 30) return 0;
     g.stars += n; g.starsTotal += n; g.dayStars[today()] = (g.dayStars[today()] || 0) + n;
     S.starFlash = (S.starFlash || 0) + n;
     return n;
@@ -1422,7 +1421,13 @@ focusCardHtml() +
     const v = vocabById(vid || (S.L && curL().vid)); if (v && /th/i.test(v.en)) g.thSaid = (g.thSaid || 0) + 1;
     checkBadges();
   }
-  function onLessonDone() { const g = G(); g.lessons = (g.lessons || 0) + 1; const n = award(10, 'lesson'); checkBadges(); return n; }
+  function onLessonDone() {
+    const g = G(); g.lessons = (g.lessons || 0) + 1;
+    // Dieselbe Lektion am selben Tag nochmal: kein zweites Mal 10 Sterne
+    g.lessonPaid = g.lessonPaid || {}; const key = today() + ':' + S.L.unitId + ':' + S.L.idx;
+    const n = g.lessonPaid[key] ? 0 : award(10, 'lesson'); g.lessonPaid[key] = 1;
+    checkBadges(); return n;
+  }
   // Tagesziel erreicht: Sterne, Schatztruhe, Serie, Begleiter wächst
   function checkGoal() {
     const g = G();
@@ -1498,7 +1503,7 @@ focusCardHtml() +
     if (!named && st >= 1) h += '<div class="row" style="margin-top:8px"><input type="text" id="petname" maxlength="16" placeholder="Wie soll dein Begleiter heißen?" style="flex:2 1 160px"><button class="btn small" data-act="namepet">Taufen</button></div>';
     if (!named && st === 0) h += '<p class="small" style="margin:6px 0 0">Schaff dein Tagesziel – dann schlüpft dein Begleiter aus dem Ei!</p>';
     h += '<div class="row" style="margin-top:10px"><b>Tagesziel</b><span class="spacer"></span><span>' + mins + ' von ' + goal + ' Min.</span></div><div class="progress" style="margin-top:6px"><div style="width:' + Math.min(100, Math.round((mins / goal) * 100)) + '%"></div></div>' +
-      (mins >= goal ? '<p class="center small" style="margin-bottom:0"><b>Für heute geschafft!</b>' + (mins >= 30 ? ' Weiterlernen ist freiwillig – ab 30 Minuten gibt es keine Extra-Sterne mehr.' : ' Weiterlernen ist freiwillig.') + '</p>' : '');
+      (mins >= goal ? '<p class="center small" style="margin-bottom:0"><b>Für heute geschafft!</b>' + ' Weiterlernen ist freiwillig und bringt weiter Sterne.' + '</p>' : '');
     if (g.chestReady === today()) h += '<button class="btn big chestbtn" data-act="openchest" style="margin-top:10px">' + ic('party') + 'Schatztruhe öffnen!</button>';
     const lock = unlocked() ? '' : ic('lock', 'lockic');
     h += '<div class="gamegrid"><button class="btn secondary" data-act="opengames">' + ic('star') + 'Minispiele' + lock + '</button><button class="btn secondary" data-act="openshop">' + ic('cup') + 'Shop' + lock + '</button>' +
