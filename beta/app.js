@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.0.5-beta.1';
+  const APP_VERSION = '2.0.6-beta.1';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -1602,6 +1602,20 @@ focusCardHtml() +
   ];
   const GAME_REWARDS_PER_DAY = 3; // höchstens 3 belohnte Spiele pro Tag (je max. 5 Sterne)
   const gameWords = () => D.vocab.filter((v) => { const u = unitById(v.unitId); return u && (u.status === 'aktuell' || u.status === 'gelernt') && prog(v.id).seen; });
+  // Wortschlange: alle englischen Wörter aus Emmas Vokabeln (auch aus Redewendungen wie „… is great.“), gelernte zuerst
+  function snakePool() {
+    const seen = new Map();
+    allPool().sort((a, b) => (prog(b.id).seen ? 1 : 0) - (prog(a.id).seen ? 1 : 0)).forEach((v) => {
+      const toks = cmpEn(v.en).toLowerCase().split(' ');
+      toks.forEach((w) => { if (/^[a-z]{3,12}$/.test(w) && (!seen.has(w) || (toks.length === 1 && !seen.get(w).whole))) seen.set(w, { w, v, whole: toks.length === 1 }); });
+    });
+    return [...seen.values()];
+  }
+  const snakeOptions = (letter, chain) => snakePool().filter((o) => o.w[0] === letter && !chain.includes(o.w));
+  function snakeStart(chain) {
+    const pool = shuffle(snakePool()).filter((o) => !chain.includes(o.w));
+    return (pool.find((o) => o.whole && prog(o.v.id).seen && snakeOptions(o.w.slice(-1), chain.concat(o.w)).length) || pool.find((o) => snakeOptions(o.w.slice(-1), chain.concat(o.w)).length) || pool[0] || {}).w;
+  }
   const singleWords = () => gameWords().filter((v) => /^[A-Za-z]+$/.test(v.en) && v.en.length >= 3 && v.en.length <= 12);
   function gameReward(n) {
     const g = G(), d = today(); g.games[d] = g.games[d] || 0;
@@ -1623,7 +1637,7 @@ focusCardHtml() +
     const gm = { id, start: Date.now(), done: false, score: 0 };
     if (id === 'memory') { const pick = ws.slice(0, 6); gm.cards = shuffle(pick.flatMap((v) => [{ k: v.id + 'e', vid: v.id, t: v.en }, { k: v.id + 'd', vid: v.id, t: deText(v) }])); gm.open = []; gm.found = []; gm.flips = 0; }
     if (id === 'scramble') { gm.words = (sw.length >= 3 ? sw : ws).slice(0, 5).map((v) => v.id); gm.i = 0; gm.used = []; gm.tiles = null; }
-    if (id === 'snake') { const fits = (v) => sw.some((o) => o.id !== v.id && o.en[0].toLowerCase() === v.en.slice(-1).toLowerCase()); const first = sw.find(fits) || sw[0] || ws[0]; gm.chain = [first.id]; gm.score = 0; gm.msg = ''; }
+    if (id === 'snake') { gm.chain = [snakeStart([]) || (ws[0] ? ws[0].en.toLowerCase() : 'cat')]; gm.score = 0; gm.msg = ''; }
     if (id === 'speed') { gm.pool = ws.map((v) => v.id); gm.i = 0; gm.end = Date.now() + 60000; gm.ok = 0; gm.timer = setInterval(() => { if (S.view !== 'game' || !S.G || S.G !== gm) return clearInterval(gm.timer); const el = document.getElementById('timer'); const left = Math.max(0, Math.ceil((gm.end - Date.now()) / 1000)); if (el) el.textContent = left + ' s'; if (left <= 0) { clearInterval(gm.timer); finishGame(gm.ok); } }, 250); }
     if (id === 'balloon') { gm.words = (sw.length ? sw : ws).slice(0, 3).map((v) => v.id); gm.i = 0; gm.guess = []; gm.miss = 0; gm.solved = 0; }
     if (id === 'twister') { gm.list = shuffle(TWISTERS).slice(0, 3); gm.i = 0; gm.said = 0; }
@@ -1654,11 +1668,13 @@ focusCardHtml() +
         gm.tiles.map((tl) => '<button class="tile" data-act="gtile" data-i="' + tl.i + '"' + (gm.used.includes(tl.i) ? ' disabled' : '') + '>' + esc(tl.x) + '</button>').join('') + '</div>' + (gm.msg ? '<p class="center">' + esc(gm.msg) + '</p>' : '') +
         '<div class="row" style="margin-top:12px"><button class="btn secondary" data-act="gundo">⌫</button><button class="btn" data-act="gscramble"' + (gm.used.length === gm.tiles.length ? '' : ' disabled') + '>Prüfen</button></div></div>';
     } else if (gm.id === 'snake') {
-      const chain = gm.chain.map(vocabById).filter(Boolean), last = chain[chain.length - 1], letter = last.en.slice(-1).toLowerCase();
-      const options = singleWords().filter((v) => v.en[0].toLowerCase() === letter && !gm.chain.includes(v.id));
-      h += '<div class="card"><div class="snake">' + chain.map((v) => '<span class="snakew">' + esc(v.en) + '</span>').join('<span class="syldot">→</span>') + '</div>' +
+      // Gibt es zum Buchstaben kein bekanntes Wort, geht die Schlange mit einem neuen Wort weiter (statt zu enden)
+      let letter = gm.chain[gm.chain.length - 1].slice(-1);
+      if (!snakeOptions(letter, gm.chain).length) { const nw = snakeStart(gm.chain); if (nw) { gm.msg = 'Mit „' + letter.toUpperCase() + '“ steht noch kein Wort in deinen Vokabeln. Weiter mit einem neuen Wort!'; gm.chain.push(nw); letter = nw.slice(-1); } }
+      const options = snakeOptions(letter, gm.chain);
+      h += '<div class="card"><div class="snake">' + gm.chain.map((w) => '<span class="snakew">' + esc(w) + '</span>').join('<span class="syldot">→</span>') + '</div>' +
         '<p class="center">Welches deiner Wörter beginnt mit <b class="bigletter">' + esc(letter.toUpperCase()) + '</b>?</p>' +
-        (options.length ? '<input type="text" id="gans" class="answer-input" autocomplete="off" autocapitalize="off" spellcheck="false" lang="en" data-enter="gsnake"><div class="row" style="margin-top:10px"><button class="btn secondary" data-act="gsnakehint">Tipp</button><button class="btn" data-act="gsnake">Weiter</button></div>' + (gm.hint ? '<p class="center small">Tipp: Es heißt auf Deutsch „' + esc(gm.hint) + '“.</p>' : '')
+        (options.length ? '<input type="text" id="gans" class="answer-input" autocomplete="off" autocapitalize="off" spellcheck="false" lang="en" data-enter="gsnake"><div class="row" style="margin-top:10px"><button class="btn secondary" data-act="gsnakehint">Tipp</button><button class="btn" data-act="gsnake">Weiter</button></div>' + (gm.hint ? '<p class="center small">Tipp: ' + esc(gm.hint) + '</p>' : '')
           : '<p class="center">Dazu kennst du noch kein Wort – die Schlange ist fertig!</p><button class="btn big" data-act="gsnakeend">Fertig</button>') + (gm.msg ? '<p class="center">' + esc(gm.msg) + '</p>' : '') + '</div>';
     } else if (gm.id === 'speed') {
       const v = vocabById(gm.pool[gm.i % gm.pool.length]);
@@ -2531,13 +2547,14 @@ focusCardHtml() +
     },
     gsnake: () => {
       const gm = S.G, val = ($('#gans').value || '').trim().toLowerCase(); if (!val) return;
-      const last = vocabById(gm.chain[gm.chain.length - 1]), letter = last.en.slice(-1).toLowerCase();
-      const hit = singleWords().find((v) => v.en.toLowerCase() === val && !gm.chain.includes(v.id));
-      if (hit && hit.en[0].toLowerCase() === letter) { gm.chain.push(hit.id); gm.score++; gm.msg = ''; gm.hint = ''; beep(true); if (gm.score >= 5) return finishGame(5); }
-      else { gm.msg = hit ? 'Das Wort beginnt nicht mit „' + letter.toUpperCase() + '“.' : 'Dieses Wort kenne ich nicht aus deinen Vokabeln.'; beep(false); }
+      const letter = gm.chain[gm.chain.length - 1].slice(-1);
+      const hit = snakePool().find((o) => o.w === val);
+      if (hit && gm.chain.includes(val)) { gm.msg = '„' + val + '“ ist schon in der Schlange.'; beep(false); }
+      else if (hit && val[0] === letter) { gm.chain.push(val); gm.score++; gm.msg = ''; gm.hint = ''; beep(true); if (gm.score >= 5) return finishGame(5); }
+      else { gm.msg = hit ? 'Das Wort beginnt nicht mit „' + letter.toUpperCase() + '“.' : 'Dieses Wort steht nicht in deinen Vokabeln. Achte auf die Schreibweise.'; beep(false); }
       rerender();
     },
-    gsnakehint: () => { const gm = S.G, last = vocabById(gm.chain[gm.chain.length - 1]), letter = last.en.slice(-1).toLowerCase(); const o = singleWords().find((v) => v.en[0].toLowerCase() === letter && !gm.chain.includes(v.id)); gm.hint = o ? deText(o) : ''; rerender(); },
+    gsnakehint: () => { const gm = S.G, opts = snakeOptions(gm.chain[gm.chain.length - 1].slice(-1), gm.chain); const o = opts.find((x) => x.whole) || opts[0]; gm.hint = o ? (o.whole ? 'Es heißt auf Deutsch „' + deText(o.v) + '“.' : 'Es steckt in „' + deText(o.v) + '“.') : ''; rerender(); },
     gsnakeend: () => finishGame(S.G.score),
     gspeed: () => {
       const gm = S.G; if (gm.done) return; const v = vocabById(gm.pool[gm.i % gm.pool.length]), val = ($('#gans').value || '').trim(); if (!val) return;
@@ -2822,6 +2839,28 @@ focusCardHtml() +
     const ev = (D.sessions || []).filter((x) => !skip.includes(x.mode)).flatMap((x) => x.ev || []).filter((e) => e.d === 'de' && e.p === 1 && dateStr(new Date(e.t)) === t).sort((a, b) => a.t - b.t);
     ev.forEach((e) => { if (vocabById(e.v) && canMove(e.v)) recordWrite(e.v, e.ok); });
     D.catchup203 = t; save();
+  }
+  // Einmalig nach dem Update auf 2.0.6: Sterne nachträglich gutschreiben, die wegen der früheren 30-Minuten-Grenze
+  // gestern und heute nicht vergeben wurden (1 Stern je Wort, das nach 30 Minuten richtig geschrieben wurde)
+  if (!D.starFix206) {
+    const g = G(), cap = 30 * 60000, skip = ['probe', 'boss', 'game'];
+    let total = 0;
+    [addDays(today(), -1), today()].forEach((day) => {
+      const ss = (D.sessions || []).filter((x) => !skip.includes(x.mode) && x.start && dateStr(new Date(x.start)) === day).sort((a, b) => (a.start < b.start ? -1 : 1));
+      let cum = 0, crossT = null;
+      for (const x of ss) {
+        const ms = x.ms || 0;
+        if (cum + ms > cap) { const st = Date.parse(x.start), en = Date.parse(x.end) || st; crossT = st + (en - st) * ((cap - cum) / ms); break; }
+        cum += ms;
+      }
+      if (crossT === null) return;
+      const ev = ss.flatMap((x) => x.ev || []).filter((e) => e.d === 'de' && e.p === 1 && e.v);
+      const before = new Set(ev.filter((e) => e.t < crossT && e.up).map((e) => e.v));
+      const n = new Set(ev.filter((e) => e.t >= crossT && e.ok && !before.has(e.v)).map((e) => e.v)).size;
+      if (n) { g.stars += n; g.starsTotal += n; g.dayStars[day] = (g.dayStars[day] || 0) + n; total += n; }
+    });
+    D.starFix206 = true; save();
+    if (total) setTimeout(() => toast('Nachträglich gutgeschrieben: ' + total + ' Sterne fürs fleißige Weiterlernen!'), 800);
   }
   render();
 })();
