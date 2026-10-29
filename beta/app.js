@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.0.6-beta.1';
+  const APP_VERSION = '2.0.7-beta.1';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -422,16 +422,22 @@
     return false;
   }
   // Beim Sprechen sind Kurz- und Langform gleich gut („what's“ = „what is“)
-  const SHORT = [["i'm", 'i am'], ["you're", 'you are'], ["we're", 'we are'], ["they're", 'they are'], ["he's", 'he is'], ["she's", 'she is'], ["it's", 'it is'], ["what's", 'what is'], ["where's", 'where is'], ["that's", 'that is'], ["there's", 'there is'], ["don't", 'do not'], ["doesn't", 'does not'], ["isn't", 'is not'], ["aren't", 'are not'], ["can't", 'cannot'], ["i've", 'i have'], ["let's", 'let us']];
+  const SHORT = [["i'm", 'i am'], ["you're", 'you are'], ["we're", 'we are'], ["they're", 'they are'], ["he's", 'he is'], ["she's", 'she is'], ["it's", 'it is'], ["what's", 'what is'], ["where's", 'where is'], ["that's", 'that is'], ["there's", 'there is'], ["don't", 'do not'], ["doesn't", 'does not'], ["isn't", 'is not'], ["aren't", 'are not'], ["can't", 'cannot'], ["i've", 'i have'], ["let's", 'let us'],
+    ["here's", 'here is'], ["who's", 'who is'], ["how's", 'how is'], ["when's", 'when is'], ["there're", 'there are'],
+    ["won't", 'will not'], ["wasn't", 'was not'], ["weren't", 'were not'], ["haven't", 'have not'], ["hasn't", 'has not'], ["didn't", 'did not'],
+    ["couldn't", 'could not'], ["wouldn't", 'would not'], ["shouldn't", 'should not'], ["mustn't", 'must not'],
+    ["you've", 'you have'], ["we've", 'we have'], ["they've", 'they have'],
+    ["i'll", 'i will'], ["you'll", 'you will'], ["he'll", 'he will'], ["she'll", 'she will'], ["it'll", 'it will'], ["we'll", 'we will'], ["they'll", 'they will'],
+    ["i'd", 'i would'], ["you'd", 'you would'], ["he'd", 'he would'], ["she'd", 'she would'], ["we'd", 'we would'], ["they'd", 'they would']];
   function expandEn(s) {
     return s.split(' ').map((t) => {
       const hit = SHORT.find(([k]) => k === t.toLowerCase());
       if (!hit) return t;
       // Groß-/Kleinschreibung des ersten Buchstabens bleibt wie getippt (wichtig für „I“)
       return /^[A-Z]/.test(t) ? hit[1][0].toUpperCase() + hit[1].slice(1) : hit[1];
-    }).join(' ');
+    }).join(' ').replace(/\b(he|she|it|who|what) is got\b/gi, '$1 has got').replace(/\bcan not\b/gi, 'cannot');
   }
-  const speechNorm = (s) => { let t = ' ' + cmpEn(s).toLowerCase().replace(/[^a-z' ]/g, '').replace(/\s+/g, ' ').trim() + ' '; SHORT.forEach(([k, l]) => { t = t.split(' ' + k + ' ').join(' ' + l + ' '); }); return t.replace(/^ to /, ' ').trim(); };
+  const speechNorm = (s) => { let t = ' ' + cmpEn(s).toLowerCase().replace(/[^a-z' ]/g, '').replace(/\s+/g, ' ').trim() + ' '; SHORT.forEach(([k, l]) => { t = t.split(' ' + k + ' ').join(' ' + l + ' '); }); return t.replace(/ (he|she|it|who|what) is got /g, ' $1 has got ').replace(/ can not /g, ' cannot ').replace(/^ to /, ' ').trim(); };
   function matchEnSpeech(heard, v) {
     const target = speechNorm(v.en);
     let best = 'nochmal';
@@ -581,6 +587,9 @@
   }
   function trackSay(v, ok, heard) {
     for (const { cat } of catsIn(normEn(v.en))) if (cat.say) bump(cat.id + ':say', !ok, { en: v.en, answer: heard || '' });
+    // Aussprache im Lernprotokoll festhalten (für die getrennte Auswertung schriftlich / mündlich)
+    const sess = (S.R && S.R.session) || (S.L && S.L.session);
+    if (sess) sess.ev.push({ v: v.id, en: v.en, de: deText(v), d: 'say', ok: !!ok, a: heard || '', p: 1, t: Date.now() });
   }
   const skillRate = (key) => { const sk = D.skills[key]; return sk && sk.n >= 3 ? sk.e / sk.t : null; };
   const WEAK = 0.34;
@@ -908,7 +917,7 @@ focusCardHtml() +
     const g = T.grade || { kind: T.writeOk ? 'ok' : 'wrong', target: v.en };
     let h;
     if (T.writeOk) {
-      const formHint = g.kind === 'longform' ? 'Richtig! Im Buch steht die Kurzform – die solltest du dir merken:' : g.kind === 'shortform' ? 'Richtig! Im Buch steht die Langform:' : '';
+      const formHint = g.kind === 'longform' ? 'Richtig! Lang- und Kurzform sind beide richtig. Im Buch steht die Kurzform:' : g.kind === 'shortform' ? 'Richtig! Kurz- und Langform sind beide richtig. Im Buch steht die Langform:' : '';
       if (formHint) h = '<div class="card good pop"><p class="feedback">✓ Richtig!</p><div class="tip">' + ic('bulb') + esc(formHint.replace('Richtig! ', '')) + '</div><div class="solution' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div>';
       else h = '<div class="card good pop"><p class="feedback">✓ ' + esc(pick(['Richtig!', 'Super!', 'Klasse!', 'Genau!'])) + '</p><div class="solution' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div>';
     } else {
@@ -2220,22 +2229,42 @@ focusCardHtml() +
     svg += '</svg>';
     const total = mins.reduce((a, b) => a + b, 0), active = mins.filter((m) => m > 0).length;
     let h = '<div class="card"><h3 style="margin-top:0">' + ic('book') + 'Lernzeit der letzten 14 Tage</h3><p class="small" style="margin-top:0">' + total + ' Min. an ' + active + ' Tagen · Tippen Sie auf einen Tag für Details.</p>' + svg + '</div>';
-    h += dayDetailHtml(S.statDay) + summaryCardHtml();
+    h += skillSplitHtml() + dayDetailHtml(S.statDay) + summaryCardHtml();
     return h;
   }
   function evStats(ev) {
-    const first = ev.filter((e) => e.p === 1);
-    const de = first.filter((e) => e.d === 'de'), en = first.filter((e) => e.d === 'en');
-    return { de: de.length, deOk: de.filter((e) => e.ok).length, en: en.length, enOk: en.filter((e) => e.ok).length, wrong: first.filter((e) => !e.ok), right: first.filter((e) => e.ok), up: de.filter((e) => e.up).length };
+    const first = ev.filter((e) => e.p === 1 && ['de', 'en', 'say'].includes(e.d));
+    const de = first.filter((e) => e.d === 'de'), en = first.filter((e) => e.d === 'en'), say = first.filter((e) => e.d === 'say');
+    return { de: de.length, deOk: de.filter((e) => e.ok).length, en: en.length, enOk: en.filter((e) => e.ok).length, say: say.length, sayOk: say.filter((e) => e.ok).length, wrong: first.filter((e) => !e.ok), right: first.filter((e) => e.ok), up: de.filter((e) => e.up).length };
   }
-  const evLine = (e) => '<li><span class="grow">' + (e.d === 'de' ? '<span class="de">' + esc(e.de) + ' →</span> <span class="en">' + esc(e.en) + '</span>' : '<span class="en">' + esc(e.en) + '</span> <span class="de">→ ' + esc(e.de) + '</span>') +
+  // Getrennte Auswertung: schriftlich (beide Richtungen) und mündlich (Aussprache)
+  function skillSplitHtml() {
+    const t = today();
+    const evIn = (n) => { const days = Array.from({ length: n }, (_, i) => addDays(t, i - n + 1)); return (D.sessions || []).filter((x) => days.includes(dayOf(x.start))).flatMap((x) => x.ev || []); };
+    const q = (ok, n) => (n ? '<b>' + Math.round((ok / n) * 100) + ' %</b> <span class="small">(' + ok + ' von ' + n + ')</span>' : '<span class="muted">–</span>');
+    const s7 = evStats(evIn(7)), s14 = evStats(evIn(14));
+    const row = (label, k) => '<tr><td>' + label + '</td><td>' + q(s7[k + 'Ok'], s7[k]) + '</td><td>' + q(s14[k + 'Ok'], s14[k]) + '</td></tr>';
+    const top = (d) => { const c = {}; s14.wrong.filter((e) => (d === 'say' ? e.d === 'say' : e.d !== 'say')).forEach((e) => { c[e.en] = (c[e.en] || 0) + 1; }); return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 5); };
+    const list = (arr) => (arr.length ? arr.map(([en, n]) => '<span class="pill warn" style="margin:2px">' + esc(en) + (n > 1 ? ' · ' + n + '×' : '') + '</span>').join(' ') : '<span class="muted">keine</span>');
+    const wOk = s14.deOk + s14.enOk, wN = s14.de + s14.en;
+    let verdict = '';
+    if (wN >= 5 && s14.say >= 5) { const dw = wOk / wN, ds = s14.sayOk / s14.say; verdict = Math.abs(dw - ds) < 0.1 ? 'Schreiben und Sprechen sind etwa gleich sicher.' : dw > ds ? 'Das Schreiben sitzt besser als die Aussprache – mehr laut nachsprechen lohnt sich.' : 'Die Aussprache sitzt besser als das Schreiben – mehr schriftlich üben lohnt sich.'; }
+    return '<div class="card"><h3 style="margin-top:0">' + ic('pencil') + 'Schriftlich und mündlich</h3><p class="small" style="margin-top:0">Richtig beim ersten Versuch.</p>' +
+      '<div class="tablewrap"><table><thead><tr><th></th><th>7 Tage</th><th>14 Tage</th></tr></thead><tbody>' +
+      row('Schriftlich Deutsch → Englisch', 'de') + row('Schriftlich Englisch → Deutsch', 'en') + row('Mündlich (Aussprache)', 'say') + '</tbody></table></div>' +
+      (verdict ? '<p>' + esc(verdict) + '</p>' : '') +
+      '<p class="small" style="margin-bottom:4px"><b>Schwierigste Wörter schriftlich (14 Tage)</b></p><p style="margin-top:0">' + list(top('write')) + '</p>' +
+      '<p class="small" style="margin-bottom:4px"><b>Schwierigste Wörter mündlich (14 Tage)</b></p><p style="margin-top:0">' + list(top('say')) + '</p>' +
+      (s14.say ? '' : '<p class="small muted" style="margin-bottom:0">Die Aussprache wird ab Version 2.0.7 aufgezeichnet. Ist die Spracherkennung unter „Einstellungen“ aus, gibt es hier keine Werte.</p>') + '</div>';
+  }
+  const evLine = (e) => e.d === 'say' ? '<li><span class="grow"><span class="en">' + esc(e.en) + '</span> <span class="small">(gesprochen)</span>' + (!e.ok ? '<br><span class="small">Gehört: „' + esc(e.a || '– nichts verstanden –') + '“</span>' : '') + '</span><span class="pill">Sprechen</span></li>' : '<li><span class="grow">' + (e.d === 'de' ? '<span class="de">' + esc(e.de) + ' →</span> <span class="en">' + esc(e.en) + '</span>' : '<span class="en">' + esc(e.en) + '</span> <span class="de">→ ' + esc(e.de) + '</span>') +
     (!e.ok ? '<br><span class="small">Emma: „' + esc(e.a || '– weiß ich nicht –') + '“</span>' : '') + '</span><span class="pill">' + (e.d === 'de' ? 'DE→EN' : 'EN→DE') + '</span></li>';
   function dayDetailHtml(ds) {
     const ss = sessionsOn(ds), m = minutesOn(ds);
     let h = '<div class="card"><h3 style="margin-top:0">' + WDL[wdOf(ds)] + ', ' + fmtDate(ds) + '</h3>';
     if (!ss.length) return h + '<p class="muted">' + (m ? m + ' Min. gelernt (Einzelheiten werden erst ab Version 1.9 aufgezeichnet).' : 'An diesem Tag wurde nicht gelernt.') + '</p></div>';
     const all = ss.flatMap((x) => x.ev), st = evStats(all);
-    h += '<p style="margin-top:0"><b>' + m + ' Min.</b> in ' + ss.length + (ss.length === 1 ? ' Runde' : ' Runden') + ' · Deutsch → Englisch: <b>' + st.deOk + ' von ' + st.de + '</b> richtig' + (st.en ? ' · Englisch → Deutsch: <b>' + st.enOk + ' von ' + st.en + '</b>' : '') + (st.up ? ' · ' + st.up + ' Wörter ein Fach weiter' : '') + '</p>';
+    h += '<p style="margin-top:0"><b>' + m + ' Min.</b> in ' + ss.length + (ss.length === 1 ? ' Runde' : ' Runden') + ' · Deutsch → Englisch: <b>' + st.deOk + ' von ' + st.de + '</b> richtig' + (st.en ? ' · Englisch → Deutsch: <b>' + st.enOk + ' von ' + st.en + '</b>' : '') + (st.say ? ' · Aussprache: <b>' + st.sayOk + ' von ' + st.say + '</b>' : '') + (st.up ? ' · ' + st.up + ' Wörter ein Fach weiter' : '') + '</p>';
     h += ss.map((x) => {
       const e = evStats(x.ev);
       return '<details class="sess"><summary><span class="grow"><b>' + hm(x.start) + '–' + hm(x.end) + ' Uhr</b> · ' + Math.max(1, Math.round(x.ms / 60000)) + ' Min. · ' + esc(MODE_NAME[x.mode] || x.mode) + '</span><span class="pill ' + (e.wrong.length ? 'warn' : 'good') + '">' + e.right.length + ' ✓ · ' + e.wrong.length + ' ✗</span></summary>' +
@@ -2255,7 +2284,8 @@ focusCardHtml() +
     lines.push('Lernzeit: ' + mins + ' Min. an ' + act.length + ' von 7 Tagen' + (act.length ? ' (Ø ' + Math.round(mins / act.length) + ' Min. pro Lerntag, Tagesziel ' + D.settings.dailyMinutes + ' Min.)' : '') + '.');
     if (act.length) lines.push('Gelernt am: ' + act.map((d) => WD[wdOf(d)] + ' ' + minutesOn(d) + ' Min.').join(', ') + '.');
     if (st.de) lines.push('Deutsch → Englisch (schriftlich): ' + st.deOk + ' von ' + st.de + ' beim ersten Versuch richtig (' + Math.round((st.deOk / st.de) * 100) + ' %).');
-    if (st.en) lines.push('Englisch → Deutsch: ' + st.enOk + ' von ' + st.en + ' richtig (' + Math.round((st.enOk / st.en) * 100) + ' %).');
+    if (st.en) lines.push('Englisch → Deutsch (schriftlich): ' + st.enOk + ' von ' + st.en + ' richtig (' + Math.round((st.enOk / st.en) * 100) + ' %).');
+    if (st.say) lines.push('Aussprache (mündlich): ' + st.sayOk + ' von ' + st.say + ' beim ersten Versuch richtig (' + Math.round((st.sayOk / st.say) * 100) + ' %).');
     if (st.up) lines.push(st.up + ' Wörter sind ein Fach weiter gekommen.');
     const cnt = {}; st.wrong.forEach((e) => { const k = e.en; cnt[k] = cnt[k] || { n: 0, a: [] }; cnt[k].n++; if (e.a && !cnt[k].a.includes(e.a)) cnt[k].a.push(e.a); });
     const top = Object.entries(cnt).sort((a, b) => b[1].n - a[1].n).slice(0, 5);
@@ -2282,6 +2312,7 @@ focusCardHtml() +
     const weak = weakCats();
     let h = '<div class="card soft"><p style="margin-top:0"><b>So funktioniert es:</b> Die App merkt sich bei jedem Fehler, an welcher Stelle im Wort er passiert ist (z. B. beim „th“ oder bei der Großschreibung), und beim Nachsprechen, welche Laute nicht verstanden wurden. Fällt ein Bereich auf (ab 3 Versuchen, mindestens jede dritte Antwort falsch), wird er zum <b>Schwerpunkt</b>:</p>' +
       '<ul><li>Bis zu 5 passende Wörter kommen zusätzlich in jede Lernrunde.</li><li>Auf Emmas Startseite erscheint eine kurze Schwerpunkt-Übung.</li><li>Bei passenden Wörtern zeigt die App den Tipp dazu.</li></ul><p class="small">Neuere Ergebnisse zählen mehr. Wird Emma besser, verschwindet der Schwerpunkt von selbst. Auch Schwerpunkt-Übungen zählen für die Lernkartei (höchstens ein Fach pro Wort und Tag).</p></div>';
+    h += skillSplitHtml();
     h += '<div class="card"><h3 style="margin-top:0">Aktuelle Schwerpunkte</h3>' + (weak.length ? '<ul class="list">' + weak.map((w) => {
       const ex = [].concat((D.skills[w.cat.id + ':write'] || {}).ex || [], (D.skills[w.cat.id + ':say'] || {}).ex || []).slice(0, 3);
       return '<li><span class="grow"><span class="en">' + esc(w.cat.label) + '</span> ' + (w.manual ? '<span class="pill">von Ihnen gesetzt</span>' : '<span class="pill warn">automatisch erkannt</span>') +
@@ -2605,10 +2636,10 @@ focusCardHtml() +
     lcheckbuilder: () => { const t = curL(); const built = t.used.map((i) => t.tiles.find((x) => x.i === i).x).join(' '); lessonAnswer(cmpEn(built).toLowerCase() === cmpEn(t.correct).toLowerCase(), built); },
     lcheckwrite: () => {
       const t = curL(), v = vocabById(t.vid), el = $('#lans'); if (!el) return; const val = el.value; if (!val.trim()) return el.focus();
-      if (t.type === 'gap') { const g = gapFor(v); const ok = cmpEn(val).toLowerCase() === cmpEn(g.answer).toLowerCase() || gradeEn(val, v).ok; return lessonAnswer(ok, val, { msg: ok ? '' : 'Noch nicht ganz. Richtig ist „' + g.answer + '“.' }); }
+      if (t.type === 'gap') { const g = gapFor(v); const ok = expandEn(cmpEn(val)).toLowerCase() === expandEn(cmpEn(g.answer)).toLowerCase() || gradeEn(val, v).ok; return lessonAnswer(ok, val, { msg: ok ? '' : 'Noch nicht ganz. Richtig ist „' + g.answer + '“.' }); }
       const g = gradeEn(val, v); let diff = '';
       if (!g.ok && lev(cmpEn(val).toLowerCase(), g.target.toLowerCase()) <= Math.ceil(g.target.length / 2)) { const d = renderDiff(val, g.target); diff = '<p class="center small" style="margin-bottom:0">Deine Antwort</p><div class="diff">' + d.mine + '</div><div class="diff">' + d.sol + '</div>'; }
-      const msg = g.ok ? (g.kind === 'longform' ? '✓ Richtig! Im Buch steht die Kurzform.' : '') : ({ near: 'Fast! Nur ein Buchstabe ist anders.', swap: 'Fast! Zwei Buchstaben sind vertauscht.', case: 'Fast! Achte auf die Großschreibung.' }[g.kind] || 'Noch nicht ganz.');
+      const msg = g.ok ? (g.kind === 'longform' ? '✓ Richtig! Beide Formen gehen. Im Buch steht die Kurzform.' : g.kind === 'shortform' ? '✓ Richtig! Beide Formen gehen. Im Buch steht die Langform.' : '') : ({ near: 'Fast! Nur ein Buchstabe ist anders.', swap: 'Fast! Zwei Buchstaben sind vertauscht.', case: 'Fast! Achte auf die Großschreibung.' }[g.kind] || 'Noch nicht ganz.');
       lessonAnswer(g.ok, val, { grade: g, diff, msg });
     },
     ldontknow: () => lessonAnswer(false, '', { msg: 'Kein Problem, so lernst du es jetzt.' }),
