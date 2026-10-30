@@ -349,3 +349,23 @@ pre.summary { white-space: pre-wrap; font: inherit; font-size: 16px; background:
 .key:disabled { opacity: .3; }
 .betabar { background: var(--warn-soft); color: var(--warn); border: 2px solid var(--warn); border-radius: 12px; padding: 6px 12px; font-size: 15px; font-weight: 700; margin-bottom: 10px; text-align: center; }
 .toastx { margin-left: 8px; background: transparent; border: 0; color: inherit; font-size: 20px; cursor: pointer; min-width: 40px; min-height: 40px; }
+
+/* Kenne-ich-Check: Kopf mit Wörtern */
+.kopfsvg { width: 100%; max-width: 240px; height: auto; display: block; margin: 0 auto; }
+.kopf-head { fill: var(--primary-soft); stroke: var(--primary); stroke-width: 3; stroke-linejoin: round; }
+.kopf-n { font-size: 34px; font-weight: 800; fill: var(--primary-dark); }
+.kopf-l { font-size: 13px; fill: var(--muted); }
+.kopf-dot { fill: var(--accent); opacity: .75; }
+
+/* Vokabel-Dusche: ruhiger, dunkler Bildschirm */
+.showerscreen { background: #0f1d26; color: #eef7f7; border-radius: var(--radius); padding: 22px 16px 18px; min-height: 78vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 14px; }
+.showerscreen .sh-label { color: #a9bcc4; font-size: .95rem; margin: 0; display: flex; gap: 6px; align-items: center; }
+.showerscreen .sh-en { font-size: 2.4rem; font-weight: 800; line-height: 1.15; word-break: break-word; opacity: .55; transition: opacity .3s; }
+.showerscreen .sh-de { font-size: 1.5rem; color: #cfe3e6; opacity: .45; transition: opacity .3s; }
+.showerscreen .sh-ex { font-size: 1.1rem; font-style: italic; color: #cfe3e6; opacity: .4; max-width: 30ch; transition: opacity .3s; }
+.showerscreen .on { opacity: 1; }
+.showerscreen .sh-en.on { color: #6fd6cf; }
+.showerscreen .sh-ctrl { justify-content: center; gap: 10px; }
+.showerscreen .btn.ghost { color: #cfe3e6; }
+.showerscreen .sh-ctrl { flex-wrap: nowrap; }
+.showerscreen .sh-ctrl .btn { width: auto; flex: 0 1 auto; min-width: 64px; margin: 0; }

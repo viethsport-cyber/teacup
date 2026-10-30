@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.0.8';
+  const APP_VERSION = '2.1.0';
   const STORE_KEY = 'teacup-data';
   const LIVE_KEY = 'teacup-data';
   const BETA = false;
@@ -198,7 +198,9 @@
     file: '<path d="M6 3h8l4 4v14H6zM14 3v4h4M9 13h6M9 17h6"/>',
     clip: '<path d="M9 4h6v3H9zM9 5.5H6a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-3M8.5 12h7M8.5 16h5"/>',
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
-    trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>'
+    trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+    head: '<path d="M9 21v-3.5C5.5 16 4 13.2 4 10a8 8 0 0 1 16 0c0 1.2.6 2 1.4 3.2.4.6 0 1.3-.7 1.3H19v2a2 2 0 0 1-2 2h-2v2.5"/><path d="M10 8.5h4M12 6.5v4"/>',
+    headphones: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/>'
   };
   // Londoner Skyline: Big Ben, Tower Bridge, London Eye, Doppeldeckerbus (Farben über CSS, auch im Dunkelmodus)
   const SKYLINE = '<svg class="skyline" viewBox="0 0 360 130" aria-hidden="true" preserveAspectRatio="xMidYMax meet">' +
@@ -471,6 +473,7 @@
     for (const v of D.vocab) {
       const u = unitById(v.unitId); if (!u) continue;
       const p = prog(v.id);
+      if (!p.seen && D.kcheck && D.kcheck.d[v.id] === 'in') continue; // wartet auf den Schreib-Check
       if (v.homework && p.seen && p.due <= t) hw.push(v);
       else if (v.homework && !p.seen) fresh.push(v);
       else if (u.status === 'kommt') continue;
@@ -641,6 +644,10 @@
     if (S.view === 'shop') return renderShop();
     if (S.view === 'games') return renderGames();
     if (S.view === 'game') return renderGame();
+    if (S.view === 'kopf') return renderKopf();
+    if (S.view === 'kopfend') return renderKopfEnd();
+    if (S.view === 'shower') return renderShower();
+    if (S.view === 'showerplay') return renderShowerPlay();
   }
   function rerender() { const y = window.scrollY; render(); window.scrollTo(0, y); }
 
@@ -683,7 +690,7 @@
     app.innerHTML =
       (BETA ? '<div class="betabar">Testversion – eigener Speicher, die normale App bleibt unverändert.</div>' : '') +
       '<div class="topbar"><h1>' + ic('cup') + 'Teacup</h1><button class="iconbtn" data-act="parent" aria-label="Elternbereich">' + ic('gear') + (dot ? '<span class="badge-dot"></span>' : '') + '</button></div>' +
-      '<div class="hero-city">' + SKYLINE + '<div class="hello"><b>Hello' + name + '!</b><span>Schön, dass du da bist.</span></div></div>' + turboCardHtml() + main + petCardHtml() + pathCardHtml() +
+      '<div class="hero-city">' + SKYLINE + '<div class="hello"><b>Hello' + name + '!</b><span>Schön, dass du da bist.</span></div></div>' + turboCardHtml() + main + kopfCardHtml() + petCardHtml() + pathCardHtml() + showerCardHtml() +
 focusCardHtml() +
       '<div class="card"><h3 style="margin-top:0">Deine Lernkartei<span class="spacer"></span><button class="helpbtn" data-act="karteihelp" aria-label="Was bedeutet das?" aria-expanded="' + !!S.karteiHelp + '">?</button></h3>' + boxesHtml(boxCounts(true)) +
         unitProgressHtml() + (S.karteiHelp ? '<div class="tip" style="margin-bottom:0">' + ic('bulb') + '<span>Jedes Wort wohnt in einem <b>Fach</b>. Schreibst du es richtig, rückt es ein Fach weiter und kommt erst später wieder dran: Fach 1 morgen, Fach 2 nach 2 Tagen, Fach 3 nach 4, Fach 4 nach 7, Fach 5 nach 14 Tagen. Danach <b>sitzt</b> es! Ist es falsch, startet es wieder in Fach 1 – so übst du schwierige Wörter öfter. Übst du mehr als den Tagesplan, zählt das auch: Jedes Wort kann pro Tag ein Fach weiterrücken.</span></div>' : '') + '</div>' +
@@ -743,6 +750,8 @@ focusCardHtml() +
     } else if (mode === 'fresh') {
       // Nur neue Vokabeln: ungelernte zuerst, dann heute noch nicht geübte, dann schwächere Fächer
       list = freshTagged().sort((a, b) => (prog(a.id).seen ? 1 : 0) - (prog(b.id).seen ? 1 : 0) || (prog(a.id).last === t ? 1 : 0) - (prog(b.id).last === t ? 1 : 0) || prog(a.id).box - prog(b.id).box).slice(0, roundMax());
+    } else if (mode === 'kcheck') {
+      list = kcPending().slice(0, roundMax());
     } else if (mode === 'all') {
       const pool = allPool(); const done = new Set(D.allCycle || []);
       let open = pool.filter((v) => !done.has(v.id));
@@ -769,6 +778,7 @@ focusCardHtml() +
       i: 0, part: 1, words: list.map((v) => v.id), total: list.length, doneWords: new Set(), done2: new Set(), firstOk2: 0, moves: {}, firstOk: 0, reported: new Set(), last: Date.now()
     };
     S.R.tasks.forEach((t) => (t.phase = 'write'));
+    if (mode === 'kcheck') S.R.tasks.forEach((t) => { t.isNew = false; t.sayFocus = false; });
     if (exam) {
       // etwa jede dritte Aufgabe Englisch → Deutsch, Rest Deutsch → Englisch (schriftlich)
       S.R.exam = exam; S.R.paper = false;
@@ -785,7 +795,7 @@ focusCardHtml() +
     checkGoal();
   }
   // Lernzeiten-Protokoll: wann, wie lange, was geübt, was richtig/falsch (für die Statistik)
-  const MODE_NAME = { plan: 'Tagesplan', fresh: 'Neue Vokabeln', all: 'Alle Vokabeln', focus: 'Schwerpunkt', extra: 'Extra-Übung', turbo: 'Test-Turbo', probe: 'Probetest', boss: 'Boss-Kampf', path: 'Lernpfad', game: 'Minispiel' };
+  const MODE_NAME = { plan: 'Tagesplan', fresh: 'Neue Vokabeln', all: 'Alle Vokabeln', focus: 'Schwerpunkt', extra: 'Extra-Übung', turbo: 'Test-Turbo', probe: 'Probetest', boss: 'Boss-Kampf', path: 'Lernpfad', game: 'Minispiel', kcheck: 'Kenne-ich-Check', shower: 'Vokabel-Dusche' };
   function newSession(mode) {
     D.sessions = D.sessions || [];
     const now = new Date().toISOString();
@@ -862,7 +872,8 @@ focusCardHtml() +
     T.writeOk = ok; T.answer = answer; T.grade = grade;
     if (T.pass === 1) {
       if (ok) R.firstOk++;
-      if (!T.noBox) R.moves[T.vid] = recordWrite(T.vid, ok);
+      if (R.mode === 'kcheck') R.moves[T.vid] = kcheckWrite(T.vid, ok);
+      else if (!T.noBox) R.moves[T.vid] = recordWrite(T.vid, ok);
       else R.kept = (R.kept || 0) + 1;
       if (R.mode === 'all') { D.allCycle = [...new Set([...(D.allCycle || []), T.vid])]; }
       if (R.mode === 'turbo') { const tst = nextTest(); if (tst) { turboOpen(tst); if (!tst.cycle.includes(T.vid)) tst.cycle.push(T.vid); } }
@@ -882,7 +893,7 @@ focusCardHtml() +
       return '<div class="topbar"><button class="iconbtn" data-act="quit" aria-label="Beenden">' + ic('x') + '</button><h1 style="font-size:1.05rem">' + (R.exam.kind === 'boss' ? 'Boss-Kampf' : 'Probetest') + ' · Aufgabe ' + (R.i + 1) + ' von ' + R.tasks.length + '</h1><span class="pill">' + ic('flag') + 'Test</span></div>' +
         '<div class="track"><div class="fill" style="width:' + pctE + '%"></div><span class="bus" style="left:' + pctE + '%">' + BUS + '</span></div><div class="steps"><span>Ohne Hilfen – wie im echten Test</span><span>' + R.tasks.length + ' Aufgaben</span></div>';
     }
-    const label = (R.part === 2 ? 'Teil 2 · ' : R.mode === 'fresh' ? 'Neu · ' : R.mode === 'all' ? 'Alle · ' : R.mode === 'turbo' ? 'Test-Turbo · ' : '') + (T.pass > 1 ? 'Noch einmal üben' : 'Wort ' + Math.min(R.total, R.i + 1) + ' von ' + R.total);
+    const label = (R.part === 2 ? 'Teil 2 · ' : R.mode === 'fresh' ? 'Neu · ' : R.mode === 'all' ? 'Alle · ' : R.mode === 'turbo' ? 'Test-Turbo · ' : R.mode === 'kcheck' ? 'Check · ' : '') + (T.pass > 1 ? 'Noch einmal üben' : 'Wort ' + Math.min(R.total, R.i + 1) + ' von ' + R.total);
     const mark = (T.focus && !R.focusCat) || R.focusCat ? ' ' + ic('target') : '';
     const steps = { write: ic('pencil') + 'Englisch schreiben', check: ic('check') + 'Kontrollieren', repeat: ic('repeat') + 'Nachsprechen', dewrite: ic('pencil') + 'Deutsch schreiben', decheck: ic('check') + 'Kontrollieren' };
     return '<div class="topbar"><button class="iconbtn" data-act="quit" aria-label="Runde beenden">' + ic('x') + '</button><h1 style="font-size:1.05rem">' + esc(label) + (R.extra ? ' · Extra' : '') + mark + '</h1><span class="pill">' + steps[T.phase] + '</span></div>' +
@@ -1035,7 +1046,8 @@ focusCardHtml() +
     if (R.focusCat) h += '<p class="small">' + ic('target') + 'Schwerpunkt ' + esc((catById(R.focusCat) || {}).label || '') + ' geübt.</p>';
     else if (R.mode === 'all') h += '<p class="small">Alle Vokabeln üben: noch ' + allPool().filter((v) => !(D.allCycle || []).includes(v.id)).length + ' Wörter offen.</p>';
     else if (R.mode === 'fresh') h += '<p class="small">Nur neue Vokabeln geübt.</p>';
-    if (ups.length) h += '<p>' + ic('star') + '<b>' + ups.length + '</b> ' + (ups.length === 1 ? 'Wort ist' : 'Wörter sind') + ' ein Fach weiter gekommen.</p>';
+    if (R.mode === 'kcheck') { const pass = Object.values(R.moves).filter((m) => m.after === 3).length, fail = Object.keys(R.moves).length - pass; h += '<p>' + ic('head') + '<b>' + pass + '</b> ' + (pass === 1 ? 'Wort sitzt' : 'Wörter sitzen') + ' schon und ' + (pass === 1 ? 'startet' : 'starten') + ' in Fach 3.' + (fail ? ' <b>' + fail + '</b> lernst du jetzt Schritt für Schritt.' : '') + '</p>' + (kcPending().length ? '<button class="btn" data-act="kcheck">Weiter mit dem Check · ' + kcPending().length + '</button>' : ''); }
+    if (ups.length && R.mode !== 'kcheck') h += '<p>' + ic('star') + '<b>' + ups.length + '</b> ' + (ups.length === 1 ? 'Wort ist' : 'Wörter sind') + ' ein Fach weiter gekommen.</p>';
     if (R.kept) h += '<p class="small">' + R.kept + (R.kept === 1 ? ' Wort hattest' : ' Wörter hattest') + ' du heute schon geübt. Jedes Wort rückt höchstens ein Fach pro Tag weiter, damit es sich gut einprägt. Morgen geht es weiter.</p>';
     h += '</div>';
     const rows = Object.entries(R.moves).map(([vid, m]) => { const v = vocabById(vid); return v ? '<li><span class="grow"><span class="en">' + esc(v.en) + '</span></span><span class="pill ' + (m.after > m.before ? 'good' : 'warn') + '">' + BOX_NAME[m.after] + '</span></li>' : ''; }).join('');
@@ -1112,6 +1124,206 @@ focusCardHtml() +
     const a = new Audio(recState.url); a.play().catch(() => {});
   }
   function recReset() { if (recState) { try { if (recState.mr && recState.mr.state === 'recording') recState.mr.stop(); } catch (e) { /* */ } if (recState.url) URL.revokeObjectURL(recState.url); } recState = null; }
+
+  // ---------- Kenne-ich-Check („Kopfwörter“): bekannte Wörter schnell aussortieren ----------
+  // Emma sortiert neue Wörter: „Im Kopf“ oder „Noch draußen“. „Im Kopf“-Wörter werden einmal
+  // schriftlich geprüft: richtig → direkt Fach 3, falsch → werden normal gelernt.
+  const KC = () => (D.kcheck = D.kcheck || { d: {}, passed: 0, failed: 0 });
+  const kcCandidates = () => sortVocab(allPool().filter((v) => !prog(v.id).seen && !KC().d[v.id]));
+  const kcPending = () => sortVocab(allPool().filter((v) => !prog(v.id).seen && KC().d[v.id] === 'in'));
+  function kopfCardHtml() {
+    const n = kcCandidates().length, m = kcPending().length;
+    if (!m && (n < 5 && !(n && Object.keys(KC().d).length))) return '';
+    return '<div class="card"><h3 style="margin-top:0">' + ic('head') + 'Kennst du schon?</h3><p class="small" style="margin-top:0">' +
+      (n ? n + ' neue Wörter. Sortiere sie: Was schon in deinem Kopf ist, musst du nicht von vorn lernen.' : '') + (m ? (n ? ' ' : '') + m + ' Wörter warten auf den kurzen Schreib-Check.' : '') + '</p>' +
+      (n ? '<button class="btn big secondary" data-act="kopfstart">' + ic('head') + 'Wörter sortieren</button>' : '') +
+      (m ? '<button class="btn big" data-act="kcheck" style="margin-top:10px">' + ic('pencil') + 'Schreib-Check · ' + m + ' Wörter</button>' : '') + '</div>';
+  }
+  function headSvg(inN, outN) {
+    const dots = Array.from({ length: Math.min(outN, 24) }, (_, i) => { const a = (i / 24) * Math.PI * 2 - Math.PI / 2; return '<circle cx="' + (100 + Math.cos(a) * 92).toFixed(1) + '" cy="' + (88 + Math.sin(a) * 80).toFixed(1) + '" r="4" class="kopf-dot"/>'; }).join('');
+    return '<svg class="kopfsvg" viewBox="0 0 200 176" aria-hidden="true">' + dots +
+      '<path class="kopf-head" d="M78 160v-22c-24-9-38-30-38-56 0-36 28-62 64-62s62 25 62 58c0 9 3 15 8 22 3 5 0 9-5 9h-7v14c0 8-5 12-13 12h-15v25z"/>' +
+      '<text x="104" y="86" text-anchor="middle" class="kopf-n">' + inN + '</text><text x="104" y="106" text-anchor="middle" class="kopf-l">im Kopf</text></svg>' +
+      '<p class="center small" style="margin:0">' + outN + ' noch draußen</p>';
+  }
+  function renderKopf() {
+    const K = S.K, v = vocabById(K.list[K.i]);
+    if (!v) { S.view = 'kopfend'; return render(); }
+    app.innerHTML = '<div class="topbar"><button class="iconbtn" data-act="home" aria-label="Pause">' + ic('x') + '</button><h1 style="font-size:1.05rem">Kennst du das schon?</h1><span class="pill">' + (K.i + 1) + ' / ' + K.list.length + '</span></div>' +
+      '<div class="card center"><div class="prompt"><div class="word en">' + esc(v.en) + '</div><p class="muted" style="margin:6px 0 0">' + esc(deText(v)) + '</p></div>' +
+      '<div class="row" style="justify-content:center;margin-top:6px"><button class="btn secondary small" data-act="kopfsay">' + ic('speaker') + 'Anhören</button></div>' +
+      '<div class="row" style="margin-top:14px"><button class="btn big secondary" data-act="kopfout">Noch draußen</button><button class="btn big good" data-act="kopfin">' + ic('head') + 'Im Kopf</button></div>' +
+      '<p class="small center" style="margin-bottom:0">Nicht ganz sicher, wie man es schreibt? Dann lieber „Noch draußen“.</p></div>' +
+      '<div class="card center">' + headSvg(K.inN, K.outN) + '</div>';
+  }
+  function renderKopfEnd() {
+    const K = S.K || { inN: 0, outN: 0 }, m = kcPending().length;
+    app.innerHTML = '<div class="topbar"><button class="iconbtn" data-act="home" aria-label="Zur Startseite">' + ic('back') + '</button><h1>Fertig sortiert!</h1></div>' +
+      '<div class="card center">' + headSvg(K.inN, K.outN) + '</div>' +
+      '<div class="card"><p style="margin-top:0">' + (m ? 'Jetzt der kurze <b>Schreib-Check</b>: Schreibst du ein „Im Kopf“-Wort richtig, springt es direkt in <b>Fach 3</b>. Sonst lernst du es ganz normal.' : 'Die Wörter „draußen“ lernst du jetzt Schritt für Schritt im Tagesplan.') + '</p>' +
+      (m ? '<button class="btn big" data-act="kcheck">' + ic('pencil') + 'Schreib-Check starten · ' + m + '</button>' : '') +
+      '<button class="btn big secondary" data-act="home" style="margin-top:10px">Zur Startseite</button></div>';
+  }
+  // Ergebnis des Schreib-Checks: richtig → Fach 3, falsch → normal lernen (Fach 1)
+  function kcheckWrite(vid, ok) {
+    const p = prog(vid), t = today(), k = KC();
+    if (!ok) { k.d[vid] = 'out'; k.failed++; return recordWrite(vid, false); }
+    p.seen = true; p.firstSeen = t; p.prev = { box: 1, due: p.due, day: t };
+    p.box = 3; p.right++; p.due = addDays(t, INTERVAL[3]); p.last = t; p.lastOk = true; p.known = true;
+    k.passed++; const v = vocabById(vid); if (v) v.homework = false;
+    award(1, 'write'); save();
+    return { before: 1, after: 3 };
+  }
+  function kcheckParentHtml() {
+    const k = KC(), nIn = Object.values(k.d).filter((x) => x === 'in').length, nOut = Object.values(k.d).filter((x) => x === 'out').length, wait = kcPending().length;
+    if (!nIn && !nOut) return '';
+    return '<div class="card"><h3 style="margin-top:0">' + ic('head') + 'Kenne-ich-Check</h3><p style="margin:0">Als bekannt sortiert: <b>' + (k.passed + wait + k.failed) + '</b> · Schreib-Check bestanden (→ Fach 3): <b>' + k.passed + '</b> · nicht bestanden (lernt sie normal): <b>' + k.failed + '</b>' + (wait ? ' · warten noch: <b>' + wait + '</b>' : '') + ' · „noch draußen“ sortiert: <b>' + (nOut - k.failed) + '</b></p></div>';
+  }
+
+  // ---------- Vokabel-Dusche: zurücklehnen und zuhören ----------
+  // Liest Wort, Bedeutung und Beispielsatz ruhig vor. Keine Wertung in der Lernkartei, keine Sterne.
+  // Die Hörzeit zählt als Lernzeit, aber höchstens 10 Minuten am Tag.
+  const SHOWER_CAP = 10 * 60000;
+  const shSet = () => (D.settings.shower = Object.assign({ src: 'new', rate: 'langsam', reps: 1, ex: true, own: true }, D.settings.shower || {}));
+  function shSources() {
+    const pool = allPool();
+    const out = [{ k: 'new', label: 'Neue Wörter', list: sortVocab(pool.filter((v) => !prog(v.id).seen)) },
+      { k: 'hard', label: 'Meine schwierigen Wörter', list: pool.filter((v) => { const p = prog(v.id); return p.seen && (p.box <= 2 || p.wrong > 0) && p.box < 6; }).sort((a, b) => prog(b.id).wrong - prog(a.id).wrong || prog(a.id).box - prog(b.id).box).slice(0, 30) }];
+    D.units.filter((u) => u.status !== 'kommt').sort((a, b) => a.order - b.order).forEach((u) => { const l = sortVocab(D.vocab.filter((v) => v.unitId === u.id)); if (l.length) out.push({ k: 'unit:' + u.id, label: u.name, list: l }); });
+    return out;
+  }
+  // Eigene Aufnahmen (nur auf diesem Gerät, im Browser-Speicher)
+  const AUDIO_DB = STORE_KEY + '-audio';
+  function idb() { return new Promise((res, rej) => { try { const r = indexedDB.open(AUDIO_DB, 1); r.onupgradeneeded = () => r.result.createObjectStore('rec'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); } catch (e) { rej(e); } }); }
+  async function recGet(vid) { try { const db = await idb(); return await new Promise((res) => { const q = db.transaction('rec').objectStore('rec').get(vid); q.onsuccess = () => res(q.result || null); q.onerror = () => res(null); }); } catch (e) { return null; } }
+  async function recPut(vid, blob) { const db = await idb(); return new Promise((res, rej) => { const tx = db.transaction('rec', 'readwrite'); tx.objectStore('rec').put(blob, vid); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); }
+  async function recKeys() { try { const db = await idb(); return await new Promise((res) => { const q = db.transaction('rec').objectStore('rec').getAllKeys(); q.onsuccess = () => res(q.result || []); q.onerror = () => res([]); }); } catch (e) { return []; } }
+  function sayText(text, lang, rate) {
+    return new Promise((resolve) => {
+      if (!('speechSynthesis' in window) || !text) return resolve();
+      const u = new SpeechSynthesisUtterance(String(text));
+      const v = lang === 'en-GB' ? gbVoice() : voices.find((x) => x.lang && x.lang.replace('_', '-').toLowerCase().startsWith('de'));
+      u.lang = lang; if (v) u.voice = v; u.rate = rate; u.pitch = 1; u.volume = 1;
+      let done = false; const fin = () => { if (!done) { done = true; resolve(); } };
+      u.onend = fin; u.onerror = fin;
+      speechSynthesis.speak(u);
+      setTimeout(fin, 3000 + String(text).length * 260);
+    });
+  }
+  let shAudio = null;
+  function playBlob(blob) {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(blob); const a = new Audio(url); shAudio = a;
+      const fin = () => { URL.revokeObjectURL(url); if (shAudio === a) shAudio = null; resolve(); };
+      a.onended = fin; a.onerror = fin; a.play().catch(fin); setTimeout(fin, 6000);
+    });
+  }
+  function shOpen() { shSet(); S.SH = null; S.view = 'shower'; render(); recKeys().then((k) => { S.shRecN = k.length; if (S.view === 'shower') rerender(); }); }
+  function renderShower() {
+    const st = shSet(), src = shSources(); if (!src.find((x) => x.k === st.src)) st.src = 'new';
+    app.innerHTML = '<div class="topbar"><button class="iconbtn" data-act="home" aria-label="Zurück">' + ic('back') + '</button><h1>' + ic('headphones') + 'Vokabel-Dusche</h1></div>' +
+      '<div class="card soft"><p style="margin:0">Mach es dir gemütlich und hör einfach zu. Die App liest jedes Wort vor, dann die Bedeutung, dann noch einmal das Wort' + (st.ex ? ' und einen Beispielsatz' : '') + '.</p></div>' +
+      '<div class="card"><label for="sh-src">Was möchtest du hören?</label><select id="sh-src">' + src.map((x) => '<option value="' + x.k + '"' + (x.k === st.src ? ' selected' : '') + (x.list.length ? '' : ' disabled') + '>' + esc(x.label) + ' (' + x.list.length + ')</option>').join('') + '</select>' +
+      '<label for="sh-rate">Tempo</label><select id="sh-rate">' + ['normal', 'langsam', 'sehr langsam'].map((k) => '<option' + (st.rate === k ? ' selected' : '') + '>' + k + '</option>').join('') + '</select>' +
+      '<label for="sh-reps">Durchläufe</label><select id="sh-reps">' + [1, 2, 3].map((n) => '<option value="' + n + '"' + (st.reps === n ? ' selected' : '') + '>' + n + '×</option>').join('') + '</select>' +
+      '<label class="check"><input type="checkbox" id="sh-ex"' + (st.ex ? ' checked' : '') + '> Mit Beispielsatz</label>' +
+      '<label class="check"><input type="checkbox" id="sh-own"' + (st.own ? ' checked' : '') + '> Meine eigene Stimme verwenden, wo ich mich aufgenommen habe' + (S.shRecN ? ' (' + S.shRecN + ' Aufnahmen)' : '') + '</label>' +
+      '<button class="btn big" data-act="shstart" style="margin-top:12px">' + ic('headphones') + 'Los geht\'s</button>' +
+      '<p class="small" style="margin-bottom:0">Tipp: Tablet entsperrt hinlegen. Beim Sperren hört die Wiedergabe auf. Aufnehmen kannst du dich während der Dusche mit „Mich aufnehmen“.</p></div>';
+  }
+  const shRate = () => ({ normal: D.settings.normalRate || 0.85, langsam: 0.65, 'sehr langsam': 0.48 }[shSet().rate] || 0.65);
+  function shStart() {
+    const st = shSet();
+    st.src = $('#sh-src').value; st.rate = $('#sh-rate').value; st.reps = Number($('#sh-reps').value) || 1; st.ex = $('#sh-ex').checked; st.own = $('#sh-own').checked;
+    const src = shSources().find((x) => x.k === st.src);
+    if (!src || !src.list.length) return toast('Dazu gibt es gerade keine Wörter.');
+    if (!('speechSynthesis' in window)) return toast('Dieses Gerät kann nicht vorlesen.');
+    const sess = newSession('shower'); sess.ev.push({ v: '', en: '', de: '', d: 'shower', ok: true, a: '', p: 1, t: Date.now() });
+    S.SH = { label: src.label, list: src.list.map((v) => v.id), i: 0, rep: 0, reps: st.reps, tok: 0, paused: false, done: false, step: '', last: Date.now(), session: sess };
+    save();
+    if (navigator.wakeLock && navigator.wakeLock.request) navigator.wakeLock.request('screen').then((l) => { if (S.SH) S.SH.lock = l; }).catch(() => {});
+    S.SH.timer = setInterval(shTick, 5000);
+    S.view = 'showerplay'; render(); shRun();
+  }
+  function shTick() {
+    const sh = S.SH; if (!sh) return;
+    const n = Date.now(), d = Math.min(n - sh.last, 90000); sh.last = n;
+    if (sh.paused || sh.done || document.hidden) return;
+    const day = D.stats.days[today()] || (D.stats.days[today()] = { ms: 0, rounds: 0 });
+    const left = Math.max(0, SHOWER_CAP - (day.shower || 0)), add = Math.min(d, left);
+    if (add > 0) { day.shower = (day.shower || 0) + add; addLearnTime(add); sh.session.ms += add; sh.session.end = new Date(n).toISOString(); checkGoal(); save(); }
+  }
+  const shWait = (ms, tok) => new Promise((r) => setTimeout(r, ms)).then(() => tok === S.SH?.tok);
+  async function shWord(tok) {
+    const sh = S.SH, v = vocabById(sh.list[sh.i]); if (!v) return;
+    const st = shSet(), rate = shRate();
+    const own = st.own ? await recGet(v.id) : null;
+    const en = async () => { if (own) await playBlob(own); else await sayText(v.en, 'en-GB', rate); };
+    sh.step = 'en'; rerender(); await en(); if (!(await shWait(900, tok))) return;
+    sh.step = 'de'; rerender(); await sayText(deText(v), 'de-DE', Math.min(1, rate + 0.15)); if (!(await shWait(900, tok))) return;
+    sh.step = 'en2'; rerender(); await en(); if (!(await shWait(700, tok))) return;
+    if (st.ex && v.exEn) { sh.step = 'ex'; rerender(); await sayText(v.exEn, 'en-GB', rate); if (!(await shWait(600, tok))) return; }
+    await shWait(900, tok);
+  }
+  async function shRun() {
+    const sh = S.SH; if (!sh) return;
+    const tok = ++sh.tok; sh.paused = false; sh.done = false;
+    while (sh.rep < sh.reps) {
+      while (sh.i < sh.list.length) {
+        await shWord(tok);
+        if (!S.SH || tok !== sh.tok) return;
+        sh.i++;
+      }
+      sh.rep++; if (sh.rep < sh.reps) sh.i = 0;
+    }
+    sh.done = true; sh.step = ''; shTick(); save(); rerender();
+  }
+  function shHalt() { const sh = S.SH; if (!sh) return; sh.tok++; try { speechSynthesis.cancel(); } catch (e) { /* */ } if (shAudio) { try { shAudio.pause(); } catch (e) { /* */ } shAudio = null; } }
+  function shStop() {
+    const sh = S.SH; if (!sh) return;
+    shTick(); shHalt(); clearInterval(sh.timer); if (sh.lock) sh.lock.release().catch(() => {});
+    save(); S.SH = null;
+  }
+  function renderShowerPlay() {
+    const sh = S.SH; if (!sh) { S.view = 'shower'; return render(); }
+    if (sh.done) {
+      app.innerHTML = '<div class="showerscreen"><p class="sh-label">' + ic('headphones') + esc(sh.label) + '</p><div class="sh-en">Fertig!</div><p class="sh-de">' + sh.list.length + ' Wörter gehört' + (sh.reps > 1 ? ', ' + sh.reps + ' Durchläufe' : '') + '.</p>' +
+        '<div class="row" style="justify-content:center"><button class="btn secondary" data-act="shagain">' + ic('repeat') + 'Nochmal</button><button class="btn" data-act="shhome">Zur Startseite</button></div></div>';
+      return;
+    }
+    const v = vocabById(sh.list[sh.i]) || {}, st = shSet();
+    app.innerHTML = '<div class="showerscreen">' +
+      '<p class="sh-label">' + ic('headphones') + esc(sh.label) + ' · ' + (sh.i + 1) + ' / ' + sh.list.length + (sh.reps > 1 ? ' · Durchlauf ' + (sh.rep + 1) + ' / ' + sh.reps : '') + '</p>' +
+      '<div class="sh-en' + (sh.step === 'en' || sh.step === 'en2' ? ' on' : '') + '">' + esc(v.en || '') + '</div>' +
+      '<div class="sh-de' + (sh.step === 'de' ? ' on' : '') + '">' + esc(v.de ? deText(v) : '') + '</div>' +
+      (st.ex && v.exEn ? '<div class="sh-ex' + (sh.step === 'ex' ? ' on' : '') + '">' + esc(v.exEn) + '</div>' : '') +
+      '<div class="row sh-ctrl"><button class="btn secondary" data-act="shprev" aria-label="Zurück">' + ic('back') + '</button>' +
+      (sh.paused ? '<button class="btn" data-act="shresume">Weiter</button>' : '<button class="btn secondary" data-act="shpause">Pause</button>') +
+      '<button class="btn secondary" data-act="shnext" aria-label="Nächstes Wort" style="transform:scaleX(-1)">' + ic('back') + '</button></div>' +
+      '<div class="row sh-ctrl">' + (S.shRec ? '<span class="small">Ich nehme auf … sprich: <b>' + esc(v.en || '') + '</b></span>' : (navigator.mediaDevices && window.MediaRecorder ? '<button class="btn ghost small" data-act="shrec">' + ic('mic') + 'Mich aufnehmen</button>' : '')) +
+      '<button class="btn ghost small" data-act="shhome">' + ic('x') + 'Beenden</button></div></div>';
+  }
+  async function shRecord() {
+    const sh = S.SH; if (!sh) return;
+    const vid = sh.list[sh.i]; shHalt(); sh.paused = true;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const chunks = []; const mr = new MediaRecorder(stream);
+      S.shRec = true; rerender();
+      mr.ondataavailable = (e) => chunks.push(e.data);
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop()); S.shRec = false;
+        try { await recPut(vid, new Blob(chunks, { type: mr.mimeType || 'audio/webm' })); toast('Gespeichert. Ab jetzt hörst du hier deine Stimme.'); } catch (e) { toast('Die Aufnahme ließ sich nicht speichern.'); }
+        rerender();
+      };
+      mr.start(); setTimeout(() => { if (mr.state === 'recording') mr.stop(); }, 3500);
+    } catch (e) { S.shRec = false; toast('Das Mikrofon ist nicht erlaubt. Bitte im Browser freigeben.'); rerender(); }
+  }
+  function showerCardHtml() {
+    if (!D.vocab.length || !('speechSynthesis' in window)) return '';
+    return '<div class="card"><h3 style="margin-top:0">' + ic('headphones') + 'Vokabel-Dusche</h3><p class="small" style="margin-top:0">Zurücklehnen und zuhören: Die App liest dir Wörter, Bedeutung und Beispielsätze langsam vor.</p>' +
+      '<button class="btn big secondary" data-act="openshower">' + ic('headphones') + 'Vokabel-Dusche starten</button></div>';
+  }
 
   // ---------- Lernpfad (Duolingo-Prinzip) ----------
   const STATION_SIZE = 6;
@@ -2325,7 +2537,7 @@ focusCardHtml() +
     const weak = weakCats();
     let h = '<div class="card soft"><p style="margin-top:0"><b>So funktioniert es:</b> Die App merkt sich bei jedem Fehler, an welcher Stelle im Wort er passiert ist (z. B. beim „th“ oder bei der Großschreibung), und beim Nachsprechen, welche Laute nicht verstanden wurden. Fällt ein Bereich auf (ab 3 Versuchen, mindestens jede dritte Antwort falsch), wird er zum <b>Schwerpunkt</b>:</p>' +
       '<ul><li>Bis zu 5 passende Wörter kommen zusätzlich in jede Lernrunde.</li><li>Auf Emmas Startseite erscheint eine kurze Schwerpunkt-Übung.</li><li>Bei passenden Wörtern zeigt die App den Tipp dazu.</li></ul><p class="small">Neuere Ergebnisse zählen mehr. Wird Emma besser, verschwindet der Schwerpunkt von selbst. Auch Schwerpunkt-Übungen zählen für die Lernkartei (höchstens ein Fach pro Wort und Tag).</p></div>';
-    h += skillSplitHtml();
+    h += skillSplitHtml() + kcheckParentHtml();
     h += '<div class="card"><h3 style="margin-top:0">Aktuelle Schwerpunkte</h3>' + (weak.length ? '<ul class="list">' + weak.map((w) => {
       const ex = [].concat((D.skills[w.cat.id + ':write'] || {}).ex || [], (D.skills[w.cat.id + ':say'] || {}).ex || []).slice(0, 3);
       return '<li><span class="grow"><span class="en">' + esc(w.cat.label) + '</span> ' + (w.manual ? '<span class="pill">von Ihnen gesetzt</span>' : '<span class="pill warn">automatisch erkannt</span>') +
@@ -2442,7 +2654,7 @@ focusCardHtml() +
   }
   // ---------- Übertragen zwischen Geräten ----------
   function packVokabeln() { return { app: 'teacup', kind: 'vokabeln', version: APP_VERSION, exportedAt: new Date().toISOString(), books: D.books, units: D.units, vocab: D.vocab, customCats: D.customCats || [], tests: tests() }; }
-  function packLernstand() { return { app: 'teacup', kind: 'lernstand', version: APP_VERSION, exportedAt: new Date().toISOString(), books: D.books, units: D.units, vocab: D.vocab, progress: D.progress, stats: D.stats, sessions: D.sessions || [], skills: D.skills, reports: D.reports, newByDay: D.newByDay, allCycle: D.allCycle || [], game: D.game || {}, path: D.path || {}, bossWon: D.bossWon || {}, tests: tests() }; }
+  function packLernstand() { return { app: 'teacup', kind: 'lernstand', version: APP_VERSION, exportedAt: new Date().toISOString(), books: D.books, units: D.units, vocab: D.vocab, progress: D.progress, stats: D.stats, sessions: D.sessions || [], skills: D.skills, reports: D.reports, newByDay: D.newByDay, allCycle: D.allCycle || [], game: D.game || {}, path: D.path || {}, bossWon: D.bossWon || {}, kcheck: D.kcheck || null, tests: tests() }; }
   const FILE_NAMES = { vokabeln: 'teacup-vokabeln-', lernstand: 'teacup-lernstand-' };
   async function sendPack(kind, download) {
     const obj = kind === 'vokabeln' ? packVokabeln() : packLernstand();
@@ -2497,7 +2709,7 @@ focusCardHtml() +
     const added = mergeVokabeln({ books: pkg.books, units: pkg.units, vocab: (pkg.vocab || []).filter((pv) => !D.vocab.some((x) => x.id === pv.id)) }, false).added;
     D.progress = pkg.progress || {}; D.stats = Object.assign({ days: {} }, pkg.stats || {}); D.sessions = pkg.sessions || [];
     D.skills = pkg.skills || {}; D.reports = pkg.reports || []; D.newByDay = pkg.newByDay || {}; D.allCycle = pkg.allCycle || [];
-    if (pkg.game) D.game = pkg.game; if (pkg.path) D.path = pkg.path; if (pkg.bossWon) D.bossWon = pkg.bossWon;
+    if (pkg.game) D.game = pkg.game; if (pkg.path) D.path = pkg.path; if (pkg.bossWon) D.bossWon = pkg.bossWon; if (pkg.kcheck) D.kcheck = pkg.kcheck;
     D.reportFrom = pkg.exportedAt; save();
     return added;
   }
@@ -2528,7 +2740,21 @@ focusCardHtml() +
   // ---------- Aktionen ----------
   const ACT = {
     parent: () => { S.view = 'parent'; render(); },
-    home: () => { S.view = 'home'; S.R = null; render(); },
+    home: () => { shStop(); S.view = 'home'; S.R = null; render(); },
+    kopfstart: () => { const l = kcCandidates(); if (!l.length) return; S.K = { list: l.map((v) => v.id), i: 0, inN: 0, outN: 0 }; S.view = 'kopf'; render(); },
+    kopfin: () => { const K = S.K; KC().d[K.list[K.i]] = 'in'; K.inN++; K.i++; save(); render(); },
+    kopfout: () => { const K = S.K; KC().d[K.list[K.i]] = 'out'; K.outN++; K.i++; save(); render(); },
+    kopfsay: () => { const v = S.K && vocabById(S.K.list[S.K.i]); if (v) speak(v.en); },
+    kcheck: () => startRound(false, null, 'kcheck'),
+    openshower: () => shOpen(),
+    shstart: () => shStart(),
+    shpause: () => { if (!S.SH) return; shHalt(); S.SH.paused = true; S.SH.step = ''; rerender(); },
+    shresume: () => { if (!S.SH) return; shRun(); rerender(); },
+    shnext: () => { const sh = S.SH; if (!sh) return; shHalt(); sh.i = Math.min(sh.list.length - 1, sh.i + 1); shRun(); },
+    shprev: () => { const sh = S.SH; if (!sh) return; shHalt(); sh.i = Math.max(0, sh.i - 1); shRun(); },
+    shrec: () => shRecord(),
+    shagain: () => { const sh = S.SH; if (!sh) return; sh.i = 0; sh.rep = 0; shRun(); rerender(); },
+    shhome: () => { shStop(); S.view = 'home'; render(); },
     leave: () => { S.unlocked = false; S.view = 'home'; S.editId = null; render(); },
     install: async () => { if (!installEvt) return; installEvt.prompt(); try { await installEvt.userChoice; } catch (e) { /* */ } installEvt = null; render(); },
     start: () => startRound(false),
