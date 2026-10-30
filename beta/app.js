@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.0.7-beta.1';
+  const APP_VERSION = '2.0.8-beta.1';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -369,13 +369,15 @@
     const hasTo = /^to /i.test(a);
     const pref = cands.filter((c) => /^to /i.test(c) === hasTo);
     for (const c of cands) if (a.toLowerCase() === c.toLowerCase()) return { ok: false, kind: 'case', target: c };
-    let best = (pref.length ? pref : cands)[0], bestD = Infinity;
-    for (const c of cands) { const dd = lev(a.toLowerCase(), c.toLowerCase()); if (dd < bestD) { bestD = dd; best = c; } }
+    // Vergleich auch mit Lang-/Kurzform der Lösung: Schreibt Emma „I am“ statt „I'm“, ist das kein Fehler und wird nicht rot markiert
+    let best = (pref.length ? pref : cands)[0], cmp = best, bestD = Infinity;
+    for (const c of cands) for (const f of [...new Set([c, expandEn(c), contractEn(c)])]) { const dd = lev(a.toLowerCase(), f.toLowerCase()); if (dd < bestD) { bestD = dd; best = c; cmp = f; } }
+    const extra = cmp !== best ? { cmp, formNote: true } : {};
     if (bestD === 1) {
-      const swapped = a.length === best.length && [...a.toLowerCase()].filter((ch, i) => ch !== best[i].toLowerCase()).length === 2;
-      return { ok: false, kind: swapped ? 'swap' : 'near', target: best };
+      const swapped = a.length === cmp.length && [...a.toLowerCase()].filter((ch, i) => ch !== cmp[i].toLowerCase()).length === 2;
+      return Object.assign({ ok: false, kind: swapped ? 'swap' : 'near', target: best }, extra);
     }
-    return { ok: false, kind: 'wrong', target: best };
+    return Object.assign({ ok: false, kind: 'wrong', target: best }, extra);
   }
   // Buchstabengenaue Gegenüberstellung von Antwort und Lösung
   function diffOps(a, b) {
@@ -436,6 +438,14 @@
       // Groß-/Kleinschreibung des ersten Buchstabens bleibt wie getippt (wichtig für „I“)
       return /^[A-Z]/.test(t) ? hit[1][0].toUpperCase() + hit[1].slice(1) : hit[1];
     }).join(' ').replace(/\b(he|she|it|who|what) is got\b/gi, '$1 has got').replace(/\bcan not\b/gi, 'cannot');
+  }
+  // Langform → Kurzform (Gegenstück zu expandEn), z. B. „I am from“ → „I'm from“
+  function contractEn(s) {
+    let t = s;
+    SHORT.slice().sort((x, y) => y[1].length - x[1].length).forEach(([k, l]) => {
+      t = t.replace(new RegExp('\\b' + l.replace(/ /g, '\\s') + '\\b', 'gi'), (m) => (/^[A-Z]/.test(m) ? k[0].toUpperCase() + k.slice(1) : k));
+    });
+    return t.replace(/\b(he|she|it|who|what) has got\b/gi, "$1's got");
   }
   const speechNorm = (s) => { let t = ' ' + cmpEn(s).toLowerCase().replace(/[^a-z' ]/g, '').replace(/\s+/g, ' ').trim() + ' '; SHORT.forEach(([k, l]) => { t = t.split(' ' + k + ' ').join(' ' + l + ' '); }); return t.replace(/ (he|she|it|who|what) is got /g, ' $1 has got ').replace(/ can not /g, ' cannot ').replace(/^ to /, ' ').trim(); };
   function matchEnSpeech(heard, v) {
@@ -565,7 +575,7 @@
   // Schriftliche Antwort auswerten. Gibt die Kategorien zurück, in denen der Fehler lag.
   function trackWrite(v, answer, grade) {
     if (!answer || !grade || grade.kind === 'empty') return [];
-    const target = grade.target, a = cmpEn(answer);
+    const target = grade.cmp || grade.target, a = cmpEn(answer);
     // Völlig andere Antwort = Wort nicht gewusst, kein Rechtschreibmuster
     if (!grade.ok && grade.kind === 'wrong' && lev(a.toLowerCase(), target.toLowerCase()) > Math.ceil(target.length / 2)) return [];
     const errIdx = new Set();
@@ -929,9 +939,10 @@ focusCardHtml() +
         wrong: 'Noch nicht ganz. Schau dir die Lösung genau an.'
       }[g.kind] || '';
       h = '<div class="card bad shake"><p class="feedback">' + esc(msg) + '</p>';
-      if (T.answer && !S.R.paper && lev(cmpEn(T.answer).toLowerCase(), g.target.toLowerCase()) <= Math.ceil(g.target.length / 2)) {
-        const d = renderDiff(T.answer, g.target);
-        h += '<p class="center small" style="margin-bottom:0">Deine Antwort</p><div class="diff">' + d.mine + '</div><p class="center small" style="margin-bottom:0">Richtig ist</p><div class="diff">' + d.sol + '</div>';
+      const gt = g.cmp || g.target;
+      if (T.answer && !S.R.paper && lev(cmpEn(T.answer).toLowerCase(), gt.toLowerCase()) <= Math.ceil(gt.length / 2)) {
+        const d = renderDiff(T.answer, gt);
+        h += '<p class="center small" style="margin-bottom:0">Deine Antwort</p><div class="diff">' + d.mine + '</div><p class="center small" style="margin-bottom:0">Richtig ist</p><div class="diff">' + d.sol + '</div>' + formNoteHtml(g);
       } else h += (T.answer ? '<p class="center small" style="margin-bottom:0">Deine Antwort</p><div class="diff"><s>' + esc(T.answer) + '</s></div>' : '') + '<p class="center small" style="margin-bottom:0">Richtig ist</p><div class="solution' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div>';
       if (g.kind === 'case') h += '<p class="center small">Namen, Wochentage, Monate und „I“ schreibt man im Englischen groß.</p>';
     }
@@ -941,6 +952,8 @@ focusCardHtml() +
     h += '<button class="btn big" data-act="next">Weiter</button>';
     return h;
   }
+  // Lang-/Kurzform ist kein Fehler: nur als Hinweis (nicht rot) mit der Form aus dem Buch
+  const formNoteHtml = (g) => (g.formNote ? '<div class="formnote">' + ic('bulb') + '<span>Die ' + (expandEn(g.target) !== g.target ? 'Langform' : 'Kurzform') + ' ist kein Fehler. Im Buch steht: <b>' + esc(g.target) + '</b></span></div>' : '');
   // Tipps zu Fehlerstelle und aktuellen Schwerpunkten (höchstens zwei)
   function focusTipsHtml(T, v) {
     const cats = [];
@@ -2638,7 +2651,8 @@ focusCardHtml() +
       const t = curL(), v = vocabById(t.vid), el = $('#lans'); if (!el) return; const val = el.value; if (!val.trim()) return el.focus();
       if (t.type === 'gap') { const g = gapFor(v); const ok = expandEn(cmpEn(val)).toLowerCase() === expandEn(cmpEn(g.answer)).toLowerCase() || gradeEn(val, v).ok; return lessonAnswer(ok, val, { msg: ok ? '' : 'Noch nicht ganz. Richtig ist „' + g.answer + '“.' }); }
       const g = gradeEn(val, v); let diff = '';
-      if (!g.ok && lev(cmpEn(val).toLowerCase(), g.target.toLowerCase()) <= Math.ceil(g.target.length / 2)) { const d = renderDiff(val, g.target); diff = '<p class="center small" style="margin-bottom:0">Deine Antwort</p><div class="diff">' + d.mine + '</div><div class="diff">' + d.sol + '</div>'; }
+      const gt = g.cmp || g.target;
+      if (!g.ok && lev(cmpEn(val).toLowerCase(), gt.toLowerCase()) <= Math.ceil(gt.length / 2)) { const d = renderDiff(val, gt); diff = '<p class="center small" style="margin-bottom:0">Deine Antwort</p><div class="diff">' + d.mine + '</div><div class="diff">' + d.sol + '</div>' + formNoteHtml(g); }
       const msg = g.ok ? (g.kind === 'longform' ? '✓ Richtig! Beide Formen gehen. Im Buch steht die Kurzform.' : g.kind === 'shortform' ? '✓ Richtig! Beide Formen gehen. Im Buch steht die Langform.' : '') : ({ near: 'Fast! Nur ein Buchstabe ist anders.', swap: 'Fast! Zwei Buchstaben sind vertauscht.', case: 'Fast! Achte auf die Großschreibung.' }[g.kind] || 'Noch nicht ganz.');
       lessonAnswer(g.ok, val, { grade: g, diff, msg });
     },
