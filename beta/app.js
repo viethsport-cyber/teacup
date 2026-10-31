@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.1.0-beta.1';
+  const APP_VERSION = '2.1.1-beta.1';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -2334,6 +2334,9 @@ focusCardHtml() +
       lastUnit = u;
       let v = D.vocab.find((x) => x.unitId === u.id && cmpEn(x.en).toLowerCase() === cmpEn(r.en).toLowerCase());
       const fields = { unitId: u.id, page: r.page, en: r.en, de: r.de, pos: r.pos, note: r.note, exEn: r.exEn, exDe: r.exDe, tip: r.tip };
+      // Beispielsätze sind ein Paar: Kommt nur eine Hälfte neu, darf die alte andere Hälfte nicht stehen bleiben
+      const has = (x) => !!(x && String(x).trim());
+      if (has(r.exEn) !== has(r.exDe)) { if (has(r.exEn)) fields.exDe = '\u0000'; else fields.exEn = '\u0000'; }
       if (!v && S.impMove !== false) {
         // Aus anderer Unit herüberholen: Bedeutungen zusammenführen, Lernstand (Box, Verlauf) bleibt
         v = findElsewhere(r.en, u.id);
@@ -2342,10 +2345,11 @@ focusCardHtml() +
       if (v) {
         // Vorhandenes Wort ergänzen: leere Felder im Import überschreiben nichts, der Lernstand bleibt
         const before = [v.exEn, v.exDe, v.tip].join('|');
-        Object.entries(fields).forEach(([k, val]) => { if (['unitId', 'en', 'de'].includes(k) || (val && String(val).trim())) v[k] = val; });
+        Object.entries(fields).forEach(([k, val]) => { if (val === '\u0000') v[k] = ''; else if (['unitId', 'en', 'de'].includes(k) || (val && String(val).trim())) v[k] = val; });
         if (before !== [v.exEn, v.exDe, v.tip].join('|')) { v.checked = checked; v.reviewNew = auto; if (r.tip) v.tipAuto = false; }
       } else {
         const nv = Object.assign({ id: uid(), createdAt: Date.now() + D.vocab.length, homework: tagNew, altEn: [], checked }, fields);
+        if (nv.exEn === '\u0000') nv.exEn = ''; if (nv.exDe === '\u0000') nv.exDe = '';
         nv.reviewNew = auto && !!(r.exEn || r.exDe || r.tip);
         if (!nv.tip) { nv.tip = autoTip(nv.en); nv.tipAuto = !!nv.tip; }
         D.vocab.push(nv);
@@ -3132,6 +3136,13 @@ focusCardHtml() +
     });
     D.starFix206 = true; save();
     if (total) setTimeout(() => toast('Nachträglich gutgeschrieben: ' + total + ' Sterne fürs fleißige Weiterlernen!'), 800);
+  }
+  // Einmalig (2.1.1): Beispielsätze aus dem Green-Line-Import bekamen keinen deutschen Satz, ein alter
+  // deutscher Satz (z. B. von den Karteikarten) blieb stehen. Passende Übersetzung eintragen.
+  if (!D.fixEx211) {
+    const BOOK_EX = {"We're from Greenwich.": "Wir sind aus Greenwich.", "Hello, I'm Pia.": "Hallo, ich bin Pia.", "I'm Luke.": "Ich bin Luke.", "What's your name? – I'm Olivia.": "Wie heißt du? – Ich bin Olivia.", "Dave is nice. He's my friend.": "Dave ist nett. Er ist mein Freund.", "Pia is from Cologne. – She's from Cologne.": "Pia ist aus Köln. – Sie ist aus Köln.", "I like horses.": "Ich mag Pferde.", "Greenwich Park is big.": "Der Greenwich Park ist groß.", "My favourite sport is football.": "Mein Lieblingssport ist Fußball.", "Luke is at home.": "Luke ist zu Hause.", "We live in Greenwich.": "Wir wohnen in Greenwich.", "The cooker is in the kitchen.": "Der Herd ist in der Küche.", "Here's a biscuit for you, Sherlock.": "Hier ist ein Keks für dich, Sherlock."};
+    D.vocab.forEach((v) => { const de = v.exEn && BOOK_EX[tidyEn(v.exEn)]; if (de && v.exDe !== de) v.exDe = de; });
+    D.fixEx211 = true; save();
   }
   render();
 })();
