@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.1.1-beta.1';
+  const APP_VERSION = '2.1.2-beta.1';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -303,7 +303,7 @@
       const finish = (r) => { if (!done) { done = true; resolve(r); } };
       let rec;
       try { rec = new SR(); } catch (e) { return finish({ error: 'unsupported', list: [] }); }
-      rec.lang = lang; rec.interimResults = false; rec.maxAlternatives = 5; rec.continuous = false;
+      rec.lang = lang; rec.interimResults = false; rec.maxAlternatives = 10; rec.continuous = false;
       rec.onresult = (e) => {
         const list = [];
         for (let i = 0; i < e.results.length; i++) for (let j = 0; j < e.results[i].length; j++) list.push(e.results[i][j].transcript);
@@ -449,14 +449,55 @@
     });
     return t.replace(/\b(he|she|it|who|what) has got\b/gi, "$1's got");
   }
-  const speechNorm = (s) => { let t = ' ' + cmpEn(s).toLowerCase().replace(/[^a-z' ]/g, '').replace(/\s+/g, ' ').trim() + ' '; SHORT.forEach(([k, l]) => { t = t.split(' ' + k + ' ').join(' ' + l + ' '); }); return t.replace(/ (he|she|it|who|what) is got /g, ' $1 has got ').replace(/ can not /g, ' cannot ').replace(/^ to /, ' ').trim(); };
+  const speechNorm = (s) => { let t = ' ' + cmpEn(s).toLowerCase().replace(/[^a-z' ]/g, '').replace(/\s+/g, ' ').trim() + ' '; SHORT.forEach(([k, l]) => { t = t.split(' ' + k + ' ').join(' ' + l + ' '); }); return t.replace(/ (he|she|it|who|what) is got /g, ' $1 has got ').replace(/ can not /g, ' cannot ').replace(/^ to (?=\S)/, ' ').trim(); };
+  // Toleranter Abgleich der Spracherkennung: Die Erkennung schreibt oft gleich klingende Wörter
+  // („there“ statt „they're“, „Mew“ statt „new“, „anima“ statt „animal“). Gezählt wird, ob es richtig klang.
+  const HOMO = [['two', 'to'], ['too', 'to'], ['four', 'for'], ['knew', 'new'], ['know', 'no'], ['write', 'right'], ['hear', 'here'], ['sea', 'see'], ['buy', 'by'], ['bye', 'by'], ['won', 'one'], ['ate', 'eight'], ['bee', 'be'], ['eye', 'i'], ['sun', 'son'], ['hour', 'our'], ['blew', 'blue'], ['meat', 'meet'], ['weak', 'week'], ['wear', 'where'], ['flour', 'flower'], ['tale', 'tail'], ['male', 'mail'], ['nose', 'knows'], ['deer', 'dear'], ['bare', 'bear'], ['hole', 'whole'], ['mom', 'mum'], ['okay', 'ok'], ['o.k.', 'ok'], ['mr', 'mister'], ['mrs', 'missus'], ['missis', 'missus']];
+  const HOMO_ALT = [[/\b(there|their)\b/g, 'they are'], [/\byour\b/g, 'you are'], [/\bwere\b/g, 'we are'], [/\bits\b/g, 'it is'], [/\bwhose\b/g, 'who is'], [/\bhes\b/g, 'he is'], [/\bshes\b/g, 'she is'], [/\bim\b/g, 'i am'], [/\blets\b/g, 'let us']];
+  const homo = (w) => { const h = HOMO.find(([k]) => k === w); return h ? h[1] : w; };
+  // Einfacher Klangschlüssel: Schreibweisen, die gleich klingen, ergeben denselben Schlüssel
+  function phon(w) {
+    let x = w.toLowerCase().replace(/[^a-z]/g, '');
+    if (x.length > 3) x = x.replace(/e$/, '');
+    x = x.replace(/^kn/, 'n').replace(/^wr/, 'r').replace(/^wh/, 'w').replace(/ph/g, 'f').replace(/ck/g, 'k').replace(/c(?=[eiy])/g, 's').replace(/[cq]/g, 'k').replace(/x/g, 'ks').replace(/z/g, 's').replace(/gh/g, '').replace(/(.)\1+/g, '$1');
+    return x ? x[0] + x.slice(1).replace(/[aeiouyhw]/g, '') : '';
+  }
+  const ALIKE = ['mn', 'bp', 'dt', 'gk', 'fv', 'vw', 'sz', 'lr'];
+  function wordLike(a, b) {
+    if (a === b) return true;
+    if (homo(a) === homo(b)) return true;
+    if (Math.min(a.length, b.length) >= 5 && phon(a) && phon(a) === phon(b)) return true; // bei kurzen Wörtern zählen die Vokale (bed ≠ bad)
+    // „th“ ist ein eigener Laut (three ≠ tree, think ≠ sink) und der Anfangslaut muss stimmen (house ≠ mouse)
+    if (a.includes('th') !== b.includes('th')) return false;
+    const d = lev(a, b), n = Math.max(a.length, b.length);
+    if (a[0] !== b[0] && !ALIKE.includes([a[0], b[0]].sort().join(''))) return false;
+    // Ein fehlender oder zusätzlicher Buchstabe bei längeren Wörtern (anima → animal)
+    if (n >= 5 && d === 1 && a.length !== b.length) return true;
+    if (n >= 8 && d <= 2 && Math.abs(a.length - b.length) === d) return true;
+    // Ein Laut verwechselt, aber ein ähnlich klingender (m/n, d/t, b/p …)
+    if (a.length === b.length && d === 1) { const i = [...a].findIndex((c, k) => c !== b[k]); return ALIKE.includes([a[i], b[i]].sort().join('')); }
+    return false;
+  }
+  // Anteil der Zielwörter, die in der gehörten Folge (in Reihenfolge) vorkommen
+  function wordsMatch(target, heard) {
+    const t = target.split(' ').filter(Boolean), h = heard.split(' ').filter(Boolean);
+    let j = 0, hit = 0;
+    for (const w of t) { const k = h.findIndex((x, idx) => idx >= j && wordLike(w, x)); if (k >= 0) { hit++; j = k + 1; } }
+    return t.length ? hit / t.length : 0;
+  }
+  // Kurze Einzelwörter erkennt die Spracherkennung schlechter: zweimal sagen hilft („dog, dog“)
+  const shortSayTip = (v) => { const w = speechNorm(v.en); return !w.includes(' ') && w.length <= 4 ? '<p class="small">Tipp: Kurze Wörter versteht das Tablet schwerer. Sag es zweimal hintereinander: „' + esc(v.en) + ', ' + esc(v.en) + '“.</p>' : ''; };
   function matchEnSpeech(heard, v) {
     const target = speechNorm(v.en);
+    const need = target.split(' ').length >= 5 ? 0.8 : 1;
     let best = 'nochmal';
     for (const h of heard) {
       const hn = speechNorm(h);
       if (hn === target || (' ' + hn + ' ').includes(' ' + target + ' ')) return 'super';
-      if (lev(hn, target) <= Math.max(1, Math.round(target.length * 0.34))) best = 'fast';
+      const vars = [hn]; HOMO_ALT.forEach(([re, to]) => { const x = hn.replace(re, to); if (x !== hn && !vars.includes(x)) vars.push(x); });
+      vars.push(HOMO_ALT.reduce((x, [re, to]) => x.replace(re, to), hn));
+      if (vars.some((x) => wordsMatch(target, x) >= need)) return 'super';
+      if (lev(hn, target) <= Math.max(1, Math.round(target.length * 0.34)) || vars.some((x) => wordsMatch(target, x) >= 0.6)) best = 'fast';
     }
     return best;
   }
@@ -1007,7 +1048,7 @@ focusCardHtml() +
       if (!fin) h += '<div class="center"><button class="mic' + (u.listening ? ' listening' : '') + '" data-act="listen-en" aria-label="Nachsprechen">' + ic('mic') + '</button><p>' + (u.listening ? 'Ich höre zu …' : 'Tippe aufs Mikrofon und sprich nach.') + '</p></div>';
       if (u.level) {
         const fb = { super: ['good', ic('star') + 'Super verstanden!'], fast: ['warn', 'Fast, hör noch mal hin.'], nochmal: ['bad', u.heard ? 'Das war noch nicht richtig. Versuch es noch einmal.' : 'Das habe ich nicht richtig verstanden – das war noch nicht ganz richtig. Hör genau hin und versuch es noch einmal.'] }[u.level];
-        h += '<div class="card ' + fb[0] + ' center"><p class="feedback">' + fb[1] + '</p>' + (u.heard ? '<p class="small">Ich habe verstanden: „' + esc(u.heard) + '“</p>' : '') + '</div>';
+        h += '<div class="card ' + fb[0] + ' center"><p class="feedback">' + fb[1] + '</p>' + (u.heard ? '<p class="small">Ich habe verstanden: „' + esc(u.heard) + '“</p>' : '') + (u.level !== 'super' ? shortSayTip(v) : '') + '</div>';
       } else if (u.msg) h += '<p class="center">' + esc(u.msg) + '</p>';
       if (u.tries >= 2 && u.level !== 'super') h += '<div class="tip">' + ic('bulb') + esc(v.checked && v.tip ? v.tip : ((catsIn(normEn(v.en)).find((x) => x.cat.say && x.cat.id !== 'final') || {}).cat || { tip: 'Hör genau hin: Ich spreche es dir langsam vor. Achte auf jeden Laut.' }).tip) + '</div>';
       if (fin) h += '<p class="center small">' + (u.level === 'super' ? '' : 'Gut geübt! Wir machen weiter.') + '</p>';
@@ -1501,7 +1542,7 @@ focusCardHtml() +
       h += '<div class="card">' + prompt('Lies laut vor', v.en, deText(v)) + speakBtns(v.en) + syllableHtml(v.en);
       if (t.done) h += '</div>' + feedbackHtml(t, null, '<p class="center small">' + esc(t.heard ? 'Ich habe verstanden: „' + t.heard + '“' : '') + '</p>');
       else if (speechOn() && !L.ui.selfMode) {
-        h += '<div class="center"><button class="mic' + (L.ui.listening ? ' listening' : '') + '" data-act="lmic" aria-label="Sprechen">' + ic('mic') + '</button><p>' + (L.ui.listening ? 'Ich höre zu …' : L.ui.level === 'nochmal' ? 'Das war noch nicht richtig. Hör genau hin und versuch es noch einmal.' : L.ui.level === 'fast' ? 'Fast! Noch einmal?' : 'Tippe aufs Mikrofon und lies vor.') + '</p></div>' +
+        h += '<div class="center"><button class="mic' + (L.ui.listening ? ' listening' : '') + '" data-act="lmic" aria-label="Sprechen">' + ic('mic') + '</button><p>' + (L.ui.listening ? 'Ich höre zu …' : L.ui.level === 'nochmal' ? 'Das war noch nicht richtig. Hör genau hin und versuch es noch einmal.' : L.ui.level === 'fast' ? 'Fast! Noch einmal?' : 'Tippe aufs Mikrofon und lies vor.') + '</p>' + (L.ui.level && L.ui.level !== 'super' ? shortSayTip(v) : '') + '</div>' +
           (L.ui.tries >= 2 ? '<div class="tip">' + ic('bulb') + esc(v.checked && v.tip ? v.tip : 'Hör genau hin: langsam vorsprechen lassen und Silbe für Silbe nachsprechen.') + '</div>' : '') + recordHtml(v.en) +
           '<button class="btn ghost" data-act="lselfspeak">Ohne Mikrofon weiter</button></div>';
       } else h += recordHtml(v.en) + '<p class="center">Sprich das Wort laut. Vergleiche mit dem Original.</p>' + (L.ui.selfMode ? '' : sayCheckOffHtml()) + '<button class="btn big" data-act="lspoke">✓ Laut gesprochen</button></div>';
