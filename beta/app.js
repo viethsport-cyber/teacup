@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.3.0-beta.2';
+  const APP_VERSION = '2.3.0-beta.3';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -727,10 +727,9 @@
   function heuteHtml() {
     const P = plan(), mins = minutesToday(), goal = D.settings.dailyMinutes, g = G(), sk = streakInfo();
     const name = D.settings.nickname ? ', ' + esc(D.settings.nickname) : '';
-    let h = '<div class="hero-city home-hero">' + SKYLINE + '<div class="hello"><b>Hello' + name + '!</b><span>' + (g.petName ? esc(g.petName) + ' wartet auf dich.' : 'Schön, dass du da bist.') + '</span>' +
-      '<div class="petstats"><span class="pill star">' + ic('star') + g.stars + '</span><span class="pill">' + ic('party') + 'Serie ' + sk.n + '</span></div></div>' +
-      '<button class="heropet" data-act="hometab" data-id="ich" aria-label="Zu deinem Begleiter">' + petSvg(petStage(), Object.assign({}, g.equipped, { deco: '' }), 'none') + '</button></div>';
+    let h = '<div class="hero-city home-hero">' + SKYLINE + '<div class="hello"><b>Hello' + name + '!</b><span>Schön, dass du da bist.</span></div></div>';
     h += '<div class="card goalcard"><div class="row"><b>Tagesziel</b><span class="spacer"></span><span>' + mins + ' von ' + goal + ' Min.</span></div><div class="progress" style="margin-top:6px"><div style="width:' + Math.min(100, Math.round((mins / goal) * 100)) + '%"></div></div>' +
+      '<div class="row goalstats"><span class="pill star">' + ic('star') + g.stars + ' Sterne</span><span class="pill">' + ic('party') + 'Serie ' + sk.n + '</span></div>' +
       (mins >= goal ? '<p class="small center" style="margin:8px 0 0"><b>Für heute geschafft!</b> Weiterlernen bringt weiter Sterne. Unter „Spielen“ ist alles offen.</p>' : '') + '</div>';
     if (!D.vocab.length) return h + '<div class="card soft center"><p><b>Noch keine Vokabeln da.</b></p><p>Die Wörter werden im Elternbereich (Zahnrad oben rechts) eingetragen.</p></div>';
     const tst = nextTest();
