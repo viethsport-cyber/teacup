@@ -369,3 +369,54 @@ pre.summary { white-space: pre-wrap; font: inherit; font-size: 16px; background:
 .showerscreen .btn.ghost { color: #cfe3e6; }
 .showerscreen .sh-ctrl { flex-wrap: nowrap; }
 .showerscreen .sh-ctrl .btn { width: auto; flex: 0 1 auto; min-width: 64px; margin: 0; }
+
+/* Startseite mit vier Bereichen */
+#app { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+.tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 8; display: flex; justify-content: center; background: var(--card); border-top: 1px solid var(--line); box-shadow: 0 -4px 16px rgba(14,124,120,.08); padding-bottom: env(safe-area-inset-bottom); }
+.tabbar .tab { flex: 1 1 0; max-width: 190px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 9px 4px 10px; background: none; border: 0; color: var(--muted); font: inherit; font-weight: 800; font-size: .82rem; cursor: pointer; }
+.tabbar .tab .ic { width: 26px; height: 26px; }
+.tabbar .tab span { display: inline-flex; align-items: center; gap: 3px; }
+.tabbar .tab .lockic { width: 13px; height: 13px; }
+.tabbar .tab.on { color: var(--primary); }
+.tabbar .tab.on .ic { transform: scale(1.12); }
+.home-hero .hello { right: 130px; }
+.home-hero .petstats { margin-top: 8px; }
+.heropet { position: absolute; right: 12px; top: 10px; width: 112px; height: 112px; padding: 0; border: 0; background: rgba(255,255,255,.55); border-radius: 22px; cursor: pointer; overflow: hidden; z-index: 2; }
+.heropet svg { width: 100%; height: 100%; display: block; }
+.goalcard { padding-top: 12px; padding-bottom: 12px; }
+.card.hint { display: flex; gap: 10px; align-items: flex-start; background: var(--sun-soft); box-shadow: none; }
+.card.hint .ic { color: var(--warn); flex: none; margin-top: 2px; }
+.linkcard { width: 100%; text-align: left; font: inherit; color: inherit; border: 0; cursor: pointer; }
+.gobtn { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 84px; font-size: 1.5rem; }
+.gobtn small { display: block; font-size: .95rem; font-weight: 700; opacity: .92; margin-top: 2px; }
+.gobtn .ic { width: 30px; height: 30px; }
+.nextline { margin: 8px 0 4px; }
+.center-check { justify-content: center; }
+.sectionhead h2 { margin: 6px 0 2px; display: flex; gap: 8px; align-items: center; }
+.sectionhead p { margin: 0 0 12px; }
+.tilehead { margin: 14px 0 8px; font-size: 1.02rem; color: var(--primary-dark); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.tile { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; min-height: 104px; padding: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); font: inherit; color: var(--text); cursor: pointer; }
+.tile .ic { width: 28px; height: 28px; color: var(--pink); }
+.tile b { font-size: 1.05rem; }
+.tile small { color: var(--muted); font-weight: 600; }
+.tile.locked { opacity: .55; }
+.tile:active, .tabbar .tab:active { transform: scale(.97); }
+.gobtn > span { display: block; font-size: 1.55rem; font-weight: 900; line-height: 1.15; }
+.gobtn small { color: inherit !important; font-size: 1rem; font-weight: 700; opacity: .95; }
+.heropet { width: 140px; height: 140px; top: 14px; right: 14px; background: rgba(255,255,255,.35); }
+@media (max-width: 480px) { .heropet { width: 96px; height: 96px; } .home-hero .hello { right: 110px; } }
+/* Begleiter steht ohne eigenen Hintergrund direkt in der Skyline */
+.heropet { top: auto; bottom: 4px; right: 6px; width: 150px; height: 120px; background: none; border-radius: 0; overflow: visible; }
+@media (max-width: 480px) {
+  .home-hero { height: 165px; }
+  .heropet { width: 112px; height: 90px; right: 2px; }
+  .home-hero .hello { right: 96px; }
+  .home-hero .hello b { font-size: 1.35rem; }
+  .goalcard { padding-top: 10px; padding-bottom: 10px; }
+  .card.hint { padding: 10px 12px; }
+  .gobtn { min-height: 72px; }
+}
+body:has(.tabbar) #toast { bottom: calc(88px + env(safe-area-inset-bottom)); }
+.goalstats { gap: 8px; margin-top: 10px; }
+.home-hero .hello { right: 16px; }
