@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.1.2-beta.1';
+  const APP_VERSION = '2.1.3-beta.1';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -1986,7 +1986,7 @@ focusCardHtml() +
     return raw.slice(0, 4) + '-' + raw.slice(4, 8) + '-' + raw.slice(8, 12);
   }
   async function makeRecovery() { const code = newRecoveryCode(); D.recovery = await hashPin('notfall:' + normCode(code)); D.recoveryAt = new Date().toISOString(); save(); S.recoveryCode = code; return code; }
-  const recoveryMailBody = (code) => 'Teacup – Notfall-Code für die Eltern-PIN\n\nNotfall-Code: ' + code + '\n\nSo geht es, wenn die PIN vergessen ist:\n1. In Teacup auf das Zahnrad tippen.\n2. „PIN vergessen?“ antippen.\n3. Diesen Code eingeben und eine neue PIN festlegen.\n\nBitte diese E-Mail aufbewahren und den Code nicht an Emma weitergeben.';
+  const recoveryMailBody = (code) => 'Teacup – Notfall-Code für die Eltern-PIN\n\nNotfall-Code: ' + code + '\n\nSo geht es, wenn die PIN vergessen ist:\n1. In Teacup auf das Zahnrad tippen.\n2. „PIN vergessen?“ antippen.\n3. Diesen Code eingeben und eine neue PIN festlegen.\n\nBitte diese E-Mail aufbewahren und den Code nicht an Ihr Kind weitergeben.';
   function recoveryPanelHtml() {
     const code = S.recoveryCode, mail = D.settings.parentEmail || '';
     return '<div class="card"><h3 style="margin-top:0">' + ic('flag') + 'Ihr Notfall-Code für die PIN</h3>' +
@@ -2006,7 +2006,7 @@ focusCardHtml() +
     }
     const setting = !D.pin || S.pinStep === 'change';
     const title = setting ? (S.pinFirst ? 'PIN wiederholen' : (S.pinStep === 'change' ? 'Neue PIN festlegen' : 'Elternbereich einrichten')) : 'Elternbereich';
-    const hint = setting ? (S.pinFirst ? 'Bitte dieselbe PIN noch einmal eingeben.' : 'Legen Sie eine 4-stellige PIN fest. Emma sollte sie nicht kennen.') : 'Bitte die 4-stellige PIN eingeben.';
+    const hint = setting ? (S.pinFirst ? 'Bitte dieselbe PIN noch einmal eingeben.' : 'Legen Sie eine 4-stellige PIN fest. Ihr Kind sollte sie nicht kennen.') : 'Bitte die 4-stellige PIN eingeben.';
     app.innerHTML = '<div class="topbar"><button class="iconbtn" data-act="home" aria-label="Zurück">' + ic('back') + '</button><h1>' + esc(title) + '</h1></div>' +
       '<div class="card"><p>' + esc(hint) + '</p><input type="password" id="pin" class="pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" data-enter="pin">' +
       '<p id="pinmsg" class="small" style="color:var(--bad)"></p><button class="btn big" data-act="pin">' + (setting ? 'Weiter' : 'Öffnen') + '</button>' +
@@ -2066,12 +2066,12 @@ focusCardHtml() +
         '<button class="btn secondary small" data-act="openunit" data-id="' + u.id + '">Öffnen</button></li>';
     }).join('') + '</ul>';
     h += '<div class="row" style="margin-top:12px"><input type="text" id="newunit" placeholder="Name der neuen Unit, z. B. Unit 2" style="flex:2 1 200px"><button class="btn secondary" data-act="addunit">+ Unit</button></div></div>';
-    h += '<div class="card"><h3 style="margin-top:0">Lernkartei gesamt</h3>' + boxesHtml(boxCounts(false)) + '<p class="small">Nur Wörter, die Emma schon einmal gelernt hat.</p></div>';
+    h += '<div class="card"><h3 style="margin-top:0">Lernkartei gesamt</h3>' + boxesHtml(boxCounts(false)) + '<p class="small">Nur Wörter, die Ihr Kind schon einmal gelernt hat.</p></div>';
     return h;
   }
   function testsAdminHtml() {
     const list = tests().filter((x) => x.date >= today()).sort((a, b) => (a.date < b.date ? -1 : 1));
-    let h = '<div class="card"><h3 style="margin-top:0">' + ic('flag') + 'Test-Turbo: Testtermine</h3><p class="small" style="margin-top:0">Ab 3 Tagen vor dem Test übt Emma täglich alle Testwörter, am Vortag gibt es einen Probetest.</p>';
+    let h = '<div class="card"><h3 style="margin-top:0">' + ic('flag') + 'Test-Turbo: Testtermine</h3><p class="small" style="margin-top:0">Ab 3 Tagen vor dem Test übt Ihr Kind täglich alle Testwörter, am Vortag gibt es einen Probetest.</p>';
     h += list.length ? '<ul class="list">' + list.map((x) => '<li><span class="grow"><span class="en">' + esc(x.name || 'Vokabeltest') + '</span> · ' + fmtShort(x.date) + '<br><span class="de">' + esc(testScopeText(x)) + ' · ' + testWords(x).length + ' Wörter' + (x.probe ? ' · Probetest ' + x.probe.score + ' %' : '') + '</span></span><button class="iconbtn" data-act="deltest" data-id="' + x.id + '" aria-label="Test löschen">' + ic('trash') + '</button></li>').join('') + '</ul>' : '';
     if (!S.testForm) return h + '<button class="btn secondary" data-act="newtest">+ Testtermin eintragen</button></div>';
     const units = D.units.slice().sort((a, b) => a.order - b.order);
@@ -2097,9 +2097,9 @@ focusCardHtml() +
     let h = '<div class="card"><button class="btn ghost" data-act="backunits">← Alle Units</button>' +
       '<label for="uname">Name der Unit</label><div class="row"><input type="text" id="uname" value="' + esc(u.name) + '" style="flex:2 1 200px"><button class="btn secondary small" data-act="renameunit">Umbenennen</button></div>' +
       '<label for="ust">Status</label><select id="ust" data-change="ustatus" data-id="' + u.id + '">' + Object.entries(STATUS).map(([k, l]) => '<option value="' + k + '"' + (u.status === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' +
-      '<p class="small">Kommt noch = für Emma unsichtbar · Aktuell = neue Wörter werden eingeführt · Gelernt = nur Wiederholung nach Plan</p></div>';
+      '<p class="small">Kommt noch = für Ihr Kind unsichtbar · Aktuell = neue Wörter werden eingeführt · Gelernt = nur Wiederholung nach Plan</p></div>';
     h += '<div class="card"><div class="row"><h3 style="margin:0;flex:1">' + words.length + ' Wörter</h3><button class="btn small" data-act="newword">+ Wort</button></div>' +
-      '<p class="small">' + ic('star') + ' = als <b>neue Vokabel</b> markieren. Emma kann sie mit „Nur neue Vokabeln“ gezielt lernen. Die Markierung verschwindet von selbst, sobald das Wort sitzt (ab Fach 3).</p>' +
+      '<p class="small">' + ic('star') + ' = als <b>neue Vokabel</b> markieren. Ihr Kind kann sie mit „Nur neue Vokabeln“ gezielt lernen. Die Markierung verschwindet von selbst, sobald das Wort sitzt (ab Fach 3).</p>' +
       (words.some((v) => v.homework) ? '<button class="btn small secondary" data-act="clearfresh" data-id="' + u.id + '">Markierung „neu“ bei allen Wörtern dieser Unit entfernen</button>' : '') + '<ul class="list">' +
       words.map((v) => {
         const p = prog(v.id);
@@ -2252,9 +2252,9 @@ focusCardHtml() +
       const newUnits = [...new Set(ok.filter((r) => r.newUnit).map((r) => r.unit))];
       h += '<div class="card"><h3 style="margin-top:0">Vorschau</h3><p><b>' + nNew + '</b> neu · <b>' + nUpd + '</b> werden aktualisiert (Lernstand bleibt) · <b' + (bad ? ' style="color:var(--bad)"' : '') + '>' + bad + '</b> mit Fehler (werden übersprungen)' + (dup ? ' · <b>' + dup + '</b> doppelt' : '') + '</p>' +
         errorSummaryHtml(P) +
-        (nEls ? '<div class="card" style="box-shadow:none"><p style="margin-top:0"><b>' + nEls + '</b> Wörter gibt es schon in einer anderen Unit (z. B. von den Karteikarten).</p><label class="check" style="margin-bottom:0"><input type="checkbox" data-change="impmove"' + (S.impMove ? ' checked' : '') + '> In diese Unit verschieben und mit den neuen Angaben ergänzen, statt doppelt anzulegen. Emmas Lernstand bleibt.</label></div>' : '') +
+        (nEls ? '<div class="card" style="box-shadow:none"><p style="margin-top:0"><b>' + nEls + '</b> Wörter gibt es schon in einer anderen Unit (z. B. von den Karteikarten).</p><label class="check" style="margin-bottom:0"><input type="checkbox" data-change="impmove"' + (S.impMove ? ' checked' : '') + '> In diese Unit verschieben und mit den neuen Angaben ergänzen, statt doppelt anzulegen. Der Lernstand des Kindes bleibt.</label></div>' : '') +
         (newUnits.length ? '<p>Neue Units: ' + esc(newUnits.join(', ')) + '</p><label for="imp-status">Status der neuen Units</label><select id="imp-status">' + Object.entries(STATUS).map(([k, l]) => '<option value="' + k + '"' + (k === 'aktuell' ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' : '') +
-        '<label class="check"><input type="checkbox" id="imp-tagnew" checked> Als <b>neue Vokabeln</b> markieren (Emma kann sie mit „Nur neue Vokabeln“ gezielt lernen)</label>' +
+        '<label class="check"><input type="checkbox" id="imp-tagnew" checked> Als <b>neue Vokabeln</b> markieren (Ihr Kind kann sie mit „Nur neue Vokabeln“ gezielt lernen)</label>' +
         (D.settings.autoApprove ? '<p class="small">Beispielsätze und Aussprachetipps sind sofort aktiv. Durchsehen und ändern: Reiter „Prüfen“.</p>' : '<label class="check"><input type="checkbox" id="imp-checked"> Beispielsätze und Aussprachetipps sind geprüft (sonst später unter „Prüfen“ freigeben)</label>') +
         '<div class="tablewrap"><table><thead><tr><th>#</th><th>Unit</th><th>S.</th><th>Englisch</th><th>Deutsch</th><th>Status</th></tr></thead><tbody>' +
         P.map((r) => '<tr' + (r.errors.length ? ' class="err"' : '') + '><td>' + r.line + '</td><td>' + esc(r.unit) + '</td><td>' + esc(r.page) + '</td><td>' + esc(r.en) + '</td><td>' + esc(r.de.join(' / ')) + '</td><td>' + (r.errors.length ? esc(r.errors.join(', ')) : r.dup ? 'doppelt, wird übersprungen' : r.existing ? 'aktualisieren' : r.elsewhere ? (S.impMove ? 'schon in „' + esc(r.elsewhereUnit) + '“: wird verschoben' : 'auch in „' + esc(r.elsewhereUnit) + '“: neu angelegt') : 'neu') + '</td></tr>').join('') +
@@ -2409,16 +2409,16 @@ focusCardHtml() +
     if (!reps.length) h += '<p class="muted">Keine offenen Meldungen.</p>';
     h += reps.map((r) => {
       const v = vocabById(r.vid); if (!v) return '';
-      return '<div class="card"><p><b>' + esc(deText(v)) + '</b> → erwartet: <b>' + esc(v.en) + '</b></p><p>Emmas Antwort: <b>' + esc(r.answer) + '</b> <span class="small">(' + fmtDate(r.day) + ')</span></p>' +
+      return '<div class="card"><p><b>' + esc(deText(v)) + '</b> → erwartet: <b>' + esc(v.en) + '</b></p><p>Antwort des Kindes: <b>' + esc(r.answer) + '</b> <span class="small">(' + fmtDate(r.day) + ')</span></p>' +
         '<label class="check"><input type="checkbox" id="acc-' + r.id + '"> Diese Schreibweise künftig als richtig akzeptieren</label>' +
         '<div class="row"><button class="btn secondary" data-act="rep-no" data-id="' + r.id + '">Bleibt falsch</button><button class="btn good" data-act="rep-yes" data-id="' + r.id + '">Als richtig werten</button></div></div>';
     }).join('') + '</div>';
     h += enrichHtml();
-    h += '<div class="card"><details><summary><b>' + ic('book') + ' Inhalte für Sammelalbum und Zungenbrecher</b></summary><p class="small">Von Claude erstellt und auf Richtigkeit geprüft. Diese Texte sieht Emma, sobald sie eine Karte in der Schatztruhe findet. Fehler bitte an Claude Code melden.</p>' +
+    h += '<div class="card"><details><summary><b>' + ic('book') + ' Inhalte für Sammelalbum und Zungenbrecher</b></summary><p class="small">Von Claude erstellt und auf Richtigkeit geprüft. Diese Texte sieht Ihr Kind, sobald es eine Karte in der Schatztruhe findet. Fehler bitte an Claude Code melden.</p>' +
       '<ul class="list">' + CARDS.map((c) => '<li><span class="grow"><span class="en">' + c.icon + ' ' + esc(c.name) + '</span> <span class="pill">' + esc(c.r) + '</span><br>' + esc(c.en) + '<br><span class="de">' + esc(c.de) + '</span></span></li>').join('') + '</ul>' +
       '<h3>Zungenbrecher</h3><ul class="list">' + TWISTERS.map((t) => '<li><span class="grow"><span class="en">' + esc(t.en) + '</span><br><span class="de">' + esc(t.de) + '</span></span></li>').join('') + '</ul></details></div>';
     const fresh = D.vocab.filter((v) => v.reviewNew && !needsReview(v));
-    h += '<div class="card"><h3 style="margin-top:0">' + ic('check') + 'Zum Durchsehen (schon aktiv)</h3><p class="small">Neu ergänzte Beispielsätze und Tipps. Emma sieht sie bereits. Bei Bedarf mit ✏️ korrigieren.</p>';
+    h += '<div class="card"><h3 style="margin-top:0">' + ic('check') + 'Zum Durchsehen (schon aktiv)</h3><p class="small">Neu ergänzte Beispielsätze und Tipps. Ihr Kind sieht sie bereits. Bei Bedarf mit ✏️ korrigieren.</p>';
     if (!fresh.length) h += '<p class="muted">Nichts Neues.</p>';
     else h += '<button class="btn secondary small" data-act="seenall">Alle ' + fresh.length + ' als durchgesehen markieren</button>';
     h += '<ul class="list">' + fresh.slice(0, 100).map((v) => '<li><span class="grow"><span class="en">' + esc(v.en) + '</span> <span class="de">(' + esc(deText(v)) + ')</span>' +
@@ -2426,7 +2426,7 @@ focusCardHtml() +
       '<button class="btn small secondary" data-act="seen" data-id="' + v.id + '">Passt</button><button class="iconbtn" data-act="edit" data-id="' + v.id + '" aria-label="Bearbeiten">' + ic('pencil') + '</button></li>').join('') + '</ul></div>';
     const list = D.vocab.filter(needsReview);
     if (!list.length) return h;
-    h += '<div class="card"><h3 style="margin-top:0">Zusatzinhalte freigeben</h3><p class="small">Diese Beispielsätze und Aussprachetipps sieht Emma erst nach Ihrer Freigabe.</p>';
+    h += '<div class="card"><h3 style="margin-top:0">Zusatzinhalte freigeben</h3><p class="small">Diese Beispielsätze und Aussprachetipps sieht Ihr Kind erst nach Ihrer Freigabe.</p>';
     h += '<button class="btn secondary small" data-act="approveall">Alle ' + list.length + ' freigeben</button>';
     h += '<ul class="list">' + list.map((v) => '<li><span class="grow"><span class="en">' + esc(v.en) + '</span> <span class="de">(' + esc(deText(v)) + ')</span>' +
       (v.exEn || v.exDe ? '<br>Beispiel: <i>' + esc(v.exEn) + '</i> – ' + esc(v.exDe) : '') + (v.tip ? '<br>Aussprache: ' + esc(v.tip) : '') + '</span>' +
@@ -2475,7 +2475,7 @@ focusCardHtml() +
   const sessionsOn = (ds) => (D.sessions || []).filter((x) => dayOf(x.start) === ds).sort((a, b) => (a.start < b.start ? -1 : 1));
   const minutesOn = (ds) => { const ms = ((D.stats.days[ds] || {}).ms) || sessionsOn(ds).reduce((t, x) => t + x.ms, 0); return ms > 0 ? Math.max(1, Math.round(ms / 60000)) : 0; };
   function reportFromHtml() {
-    return D.reportFrom ? '<div class="card soft" style="padding:12px 16px"><p class="small" style="margin:0">' + ic('download') + ' Stand von Emmas Gerät vom <b>' + fmtDate(D.reportFrom) + ', ' + hm(D.reportFrom) + ' Uhr</b>. Neuer Stand: auf Emmas Gerät „Lernstand an Eltern senden“.</p></div>' : '';
+    return D.reportFrom ? '<div class="card soft" style="padding:12px 16px"><p class="small" style="margin:0">' + ic('download') + ' Stand vom Gerät des Kindes vom <b>' + fmtDate(D.reportFrom) + ', ' + hm(D.reportFrom) + ' Uhr</b>. Neuer Stand: auf dem Gerät des Kindes „Lernstand an Eltern senden“.</p></div>' : '';
   }
   function barPath(x, y, w, h, r) { r = Math.min(r, h, w / 2); return 'M' + x + ' ' + (y + h) + 'V' + (y + r) + 'Q' + x + ' ' + y + ' ' + (x + r) + ' ' + y + 'H' + (x + w - r) + 'Q' + (x + w) + ' ' + y + ' ' + (x + w) + ' ' + (y + r) + 'V' + (y + h) + 'Z'; }
   function statsHtml() {
@@ -2528,7 +2528,7 @@ focusCardHtml() +
       (s14.say ? '' : '<p class="small muted" style="margin-bottom:0">Die Aussprache wird ab Version 2.0.7 aufgezeichnet. Ist die Spracherkennung unter „Einstellungen“ aus, gibt es hier keine Werte.</p>') + '</div>';
   }
   const evLine = (e) => e.d === 'say' ? '<li><span class="grow"><span class="en">' + esc(e.en) + '</span> <span class="small">(gesprochen)</span>' + (!e.ok ? '<br><span class="small">Gehört: „' + esc(e.a || '– nichts verstanden –') + '“</span>' : '') + '</span><span class="pill">Sprechen</span></li>' : '<li><span class="grow">' + (e.d === 'de' ? '<span class="de">' + esc(e.de) + ' →</span> <span class="en">' + esc(e.en) + '</span>' : '<span class="en">' + esc(e.en) + '</span> <span class="de">→ ' + esc(e.de) + '</span>') +
-    (!e.ok ? '<br><span class="small">Emma: „' + esc(e.a || '– weiß ich nicht –') + '“</span>' : '') + '</span><span class="pill">' + (e.d === 'de' ? 'DE→EN' : 'EN→DE') + '</span></li>';
+    (!e.ok ? '<br><span class="small">Antwort: „' + esc(e.a || '– weiß ich nicht –') + '“</span>' : '') + '</span><span class="pill">' + (e.d === 'de' ? 'DE→EN' : 'EN→DE') + '</span></li>';
   function dayDetailHtml(ds) {
     const ss = sessionsOn(ds), m = minutesOn(ds);
     let h = '<div class="card"><h3 style="margin-top:0">' + WDL[wdOf(ds)] + ', ' + fmtDate(ds) + '</h3>';
@@ -2549,7 +2549,7 @@ focusCardHtml() +
     const ss = (D.sessions || []).filter((x) => days.includes(dayOf(x.start)));
     const mins = days.reduce((a, d) => a + minutesOn(d), 0), act = days.filter((d) => minutesOn(d) > 0);
     const st = evStats(ss.flatMap((x) => x.ev));
-    const name = D.settings.nickname || 'Emma';
+    const name = D.settings.nickname || 'Ihr Kind';
     const lines = ['Teacup – Wochenbericht ' + fmtDate(days[0]) + ' bis ' + fmtDate(t), ''];
     lines.push('Lernzeit: ' + mins + ' Min. an ' + act.length + ' von 7 Tagen' + (act.length ? ' (Ø ' + Math.round(mins / act.length) + ' Min. pro Lerntag, Tagesziel ' + D.settings.dailyMinutes + ' Min.)' : '') + '.');
     if (act.length) lines.push('Gelernt am: ' + act.map((d) => WD[wdOf(d)] + ' ' + minutesOn(d) + ' Min.').join(', ') + '.');
@@ -2581,7 +2581,7 @@ focusCardHtml() +
   function analysisHtml() {
     const weak = weakCats();
     let h = '<div class="card soft"><p style="margin-top:0"><b>So funktioniert es:</b> Die App merkt sich bei jedem Fehler, an welcher Stelle im Wort er passiert ist (z. B. beim „th“ oder bei der Großschreibung), und beim Nachsprechen, welche Laute nicht verstanden wurden. Fällt ein Bereich auf (ab 3 Versuchen, mindestens jede dritte Antwort falsch), wird er zum <b>Schwerpunkt</b>:</p>' +
-      '<ul><li>Bis zu 5 passende Wörter kommen zusätzlich in jede Lernrunde.</li><li>Auf Emmas Startseite erscheint eine kurze Schwerpunkt-Übung.</li><li>Bei passenden Wörtern zeigt die App den Tipp dazu.</li></ul><p class="small">Neuere Ergebnisse zählen mehr. Wird Emma besser, verschwindet der Schwerpunkt von selbst. Auch Schwerpunkt-Übungen zählen für die Lernkartei (höchstens ein Fach pro Wort und Tag).</p></div>';
+      '<ul><li>Bis zu 5 passende Wörter kommen zusätzlich in jede Lernrunde.</li><li>Auf der Startseite des Kindes erscheint eine kurze Schwerpunkt-Übung.</li><li>Bei passenden Wörtern zeigt die App den Tipp dazu.</li></ul><p class="small">Neuere Ergebnisse zählen mehr. Wird Ihr Kind besser, verschwindet der Schwerpunkt von selbst. Auch Schwerpunkt-Übungen zählen für die Lernkartei (höchstens ein Fach pro Wort und Tag).</p></div>';
     h += skillSplitHtml() + kcheckParentHtml();
     h += '<div class="card"><h3 style="margin-top:0">Aktuelle Schwerpunkte</h3>' + (weak.length ? '<ul class="list">' + weak.map((w) => {
       const ex = [].concat((D.skills[w.cat.id + ':write'] || {}).ex || [], (D.skills[w.cat.id + ':say'] || {}).ex || []).slice(0, 3);
@@ -2599,7 +2599,7 @@ focusCardHtml() +
       }).join('') + '</ul>' +
       '<h3>Eigenen Schwerpunkt hinzufügen</h3><p class="small">Buchstaben oder Wörter, z. B. „I am“, „ch“ oder „-ing“. Die App übt dann alle Vokabeln, in denen das vorkommt.</p>' +
       '<div class="row"><input type="text" id="newcat" placeholder="z. B. I am" style="flex:2 1 160px"><button class="btn secondary" data-act="addcat">+ Hinzufügen</button></div>' +
-      '<label for="newcattip">Tipp für Emma (optional)</label><input type="text" id="newcattip" placeholder="z. B. I am = ich bin, immer mit großem I"></div>';
+      '<label for="newcattip">Tipp für Ihr Kind (optional)</label><input type="text" id="newcattip" placeholder="z. B. I am = ich bin, immer mit großem I"></div>';
     const top = D.vocab.filter((v) => prog(v.id).wrong > 0).sort((a, b) => prog(b.id).wrong - prog(a.id).wrong || prog(a.id).right - prog(b.id).right).slice(0, 10);
     h += '<div class="card"><h3 style="margin-top:0">Problemwörter (Top 10)</h3>' + (top.length ? '<ul class="list">' + top.map((v) => '<li><span class="grow"><span class="en">' + esc(v.en) + '</span> <span class="de">' + esc(deText(v)) + '</span></span><span class="pill bad">' + prog(v.id).wrong + '× falsch</span><span class="pill">' + BOX_NAME[prog(v.id).box] + '</span></li>').join('') + '</ul>' : '<p class="muted">Noch keine.</p>') + '</div>';
     return h;
@@ -2614,12 +2614,12 @@ focusCardHtml() +
       '<label for="s-say">Nachsprechen</label><select id="s-say" data-change="saymode">' + [['immer', 'bei jedem Wort'], ['haeufig', 'häufig: neue, falsche und jedes zweite Wort (empfohlen)'], ['neu', 'nur bei neuen Wörtern']].map(([k, l]) => '<option value="' + k + '"' + ((s.sayMode || 'haeufig') === k ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' +
       '<label for="s-min">Tagesziel</label><select id="s-min" data-change="minutes">' + [10, 12, 15, 20].map((m) => '<option value="' + m + '"' + (s.dailyMinutes === m ? ' selected' : '') + '>' + m + ' Minuten</option>').join('') + '</select>' +
       '<label class="check"><input type="checkbox" data-change="toopt" ' + (s.toOptional ? 'checked' : '') + '> Bei Verben ist „to“ freiwillig (z. B. „write“ statt „to write“ gilt als richtig)</label>' +
-      '<label class="check"><input type="checkbox" data-change="paperallowed" ' + (s.paperAllowed ? 'checked' : '') + '> Papier-Variante anbieten (Emma schreibt auf Papier und bewertet selbst)</label>' +
+      '<label class="check"><input type="checkbox" data-change="paperallowed" ' + (s.paperAllowed ? 'checked' : '') + '> Papier-Variante anbieten (Ihr Kind schreibt auf Papier und bewertet selbst)</label>' +
       '<label class="check"><input type="checkbox" data-change="autoapprove" ' + (s.autoApprove ? 'checked' : '') + '> Neue Beispielsätze und Aussprachetipps sofort aktiv (Durchsehen unter „Prüfen“)</label>' +
       '<label class="check"><input type="checkbox" data-change="sound" ' + (s.sound ? 'checked' : '') + '> Töne bei richtig und falsch</label>' +
       '<label for="s-theme">Darstellung</label><select id="s-theme" data-change="theme"><option value="auto"' + (s.theme === 'auto' ? ' selected' : '') + '>Automatisch (wie das Gerät)</option><option value="light"' + (s.theme === 'light' ? ' selected' : '') + '>Hell</option><option value="dark"' + (s.theme === 'dark' ? ' selected' : '') + '>Dunkel</option></select></div>' +
       '<div class="card"><h3 style="margin-top:0">Spracherkennung</h3>' + (SR ? '' : '<p class="pill bad">Dieser Browser hat keine Spracherkennung. Bitte Chrome verwenden.</p>') +
-      '<p class="small">Datenschutz-Hinweis: Die Spracherkennung von Chrome schickt die Sprachaufnahme zur Auswertung an Google. Dafür braucht es Internet. Die App selbst speichert keine Aufnahmen. Ist die Erkennung aus, spricht Emma laut und bewertet sich selbst.</p>' +
+      '<p class="small">Datenschutz-Hinweis: Die Spracherkennung von Chrome schickt die Sprachaufnahme zur Auswertung an Google. Dafür braucht es Internet. Die App selbst speichert keine Aufnahmen. Ist die Erkennung aus, spricht Ihr Kind laut und bewertet sich selbst.</p>' +
       (s.speech ? '<p><span class="pill good">eingeschaltet</span></p><button class="btn secondary" data-act="speechoff">Ausschalten</button> <button class="btn secondary" data-act="mictest">Mikrofon testen</button>'
         : '<button class="btn" data-act="speechon"' + (SR ? '' : ' disabled') + '>Hinweis gelesen, einschalten</button>') + '<p id="mictest" class="small"></p></div>' +
       voiceHtml() +
@@ -2656,9 +2656,9 @@ focusCardHtml() +
   }
   function backupHtml() {
     const share = (kind, label) => '<div class="row"><button class="btn" data-act="sendfile" data-kind="' + kind + '">' + ic('share') + label + '</button><button class="btn secondary" data-act="savefile" data-kind="' + kind + '">' + ic('download') + 'Herunterladen</button></div>';
-    let h = betaHtml() + '<div class="card soft"><p style="margin:0"><b>Zwei Geräte, ein Stand:</b> Vokabeln pflegen Sie auf Ihrem Handy und senden sie an Emmas Gerät. Emmas Lernstand senden Sie von ihrem Gerät an Ihr Handy, um dort Auswertung und Statistik zu sehen. Übertragen wird per Datei (z. B. WhatsApp, E-Mail, Drive, Quick Share).</p></div>' +
-      '<div class="card"><h3 style="margin-top:0">' + ic('book') + '1. Vokabeln an Emmas Gerät senden</h3><p class="small" style="margin-top:0">Nur Units und Vokabeln (inkl. Beispielsätze, Tipps, Markierung „neu“). Auf Emmas Gerät werden neue Wörter ergänzt und geänderte aktualisiert. <b>Ihr Lernstand bleibt erhalten.</b></p>' + share('vokabeln', 'Vokabeln senden …') + '</div>' +
-      '<div class="card"><h3 style="margin-top:0">' + ic('star') + '2. Lernstand an Eltern senden</h3><p class="small" style="margin-top:0">Auf <b>Emmas Gerät</b> antippen. Auf Ihrem Handy sehen Sie danach Auswertung und Statistik. Ihre Vokabeln dort bleiben erhalten.</p>' + share('lernstand', 'Lernstand senden …') + '</div>' +
+    let h = betaHtml() + '<div class="card soft"><p style="margin:0"><b>Zwei Geräte, ein Stand:</b> Vokabeln pflegen Sie auf Ihrem Handy und senden sie an das Gerät des Kindes. Den Lernstand des Kindes senden Sie von seinem Gerät an Ihr Handy, um dort Auswertung und Statistik zu sehen. Übertragen wird per Datei (z. B. WhatsApp, E-Mail, Drive, Quick Share).</p></div>' +
+      '<div class="card"><h3 style="margin-top:0">' + ic('book') + '1. Vokabeln an das Gerät des Kindes senden</h3><p class="small" style="margin-top:0">Nur Units und Vokabeln (inkl. Beispielsätze, Tipps, Markierung „neu“). Auf dem Gerät des Kindes werden neue Wörter ergänzt und geänderte aktualisiert. <b>Ihr Lernstand bleibt erhalten.</b></p>' + share('vokabeln', 'Vokabeln senden …') + '</div>' +
+      '<div class="card"><h3 style="margin-top:0">' + ic('star') + '2. Lernstand an Eltern senden</h3><p class="small" style="margin-top:0">Auf dem <b>Gerät des Kindes</b> antippen. Auf Ihrem Handy sehen Sie danach Auswertung und Statistik. Ihre Vokabeln dort bleiben erhalten.</p>' + share('lernstand', 'Lernstand senden …') + '</div>' +
       '<div class="card"><h3 style="margin-top:0">' + ic('file') + '3. Empfangene Datei einspielen</h3><p class="small" style="margin-top:0">Die App erkennt selbst, ob es Vokabeln, ein Lernstand oder eine komplette Sicherung ist, und zeigt vorher an, was passiert.</p>' +
       '<label class="btn secondary" style="margin:0">' + ic('file') + 'Datei auswählen<input type="file" id="bfile" data-change="bfile" accept=".json,application/json,application/octet-stream,text/plain" hidden></label>' + incomingHtml() + '</div>';
     h += '<div class="card"><h3 style="margin-top:0">Komplette Sicherung</h3><p>Letzte Sicherung: <b>' + (D.lastBackupAt ? fmtDate(D.lastBackupAt) : 'noch keine') + '</b></p>' +
@@ -2768,7 +2768,7 @@ focusCardHtml() +
     }
     if (f.kind === 'lernstand') {
       const ss = f.sessions || [], last = ss.length ? ss[ss.length - 1].end : null;
-      return '<div class="card soft"><p><b>Lernstand von Emmas Gerät</b> vom ' + when + ': ' + Object.values(f.progress).filter((p) => p.seen).length + ' gelernte Wörter, ' + ss.length + ' Lernrunden' + (last ? ', zuletzt gelernt am ' + fmtDate(last) + ' um ' + hm(last) + ' Uhr' : '') + '.</p><p class="small">Ersetzt auf diesem Gerät nur Lernstand, Lernzeiten und Auswertung. Ihre Vokabeln bleiben; Wörter, die nur auf Emmas Gerät existieren, werden ergänzt.</p>' +
+      return '<div class="card soft"><p><b>Lernstand vom Gerät des Kindes</b> vom ' + when + ': ' + Object.values(f.progress).filter((p) => p.seen).length + ' gelernte Wörter, ' + ss.length + ' Lernrunden' + (last ? ', zuletzt gelernt am ' + fmtDate(last) + ' um ' + hm(last) + ' Uhr' : '') + '.</p><p class="small">Ersetzt auf diesem Gerät nur Lernstand, Lernzeiten und Auswertung. Ihre Vokabeln bleiben; Wörter, die nur auf dem Gerät des Kindes existieren, werden ergänzt.</p>' +
         '<button class="btn good" data-act="applyls">Lernstand übernehmen</button> <button class="btn secondary" data-act="cancelrestore">Abbrechen</button></div>';
     }
     const b = f.data;
@@ -2897,7 +2897,7 @@ focusCardHtml() +
       const before = JSON.stringify(D);
       Object.assign(D, { progress: {}, stats: { days: {} }, sessions: [], skills: {}, reports: [], newByDay: {}, allCycle: [], game: {}, path: {}, bossWon: {} });
       save(); rerender();
-      toast('Lernstand zurückgesetzt. Emma startet bei null.', 'Rückgängig', () => { D = migrate(JSON.parse(before)); save(); rerender(); toast('Wiederhergestellt.'); });
+      toast('Lernstand zurückgesetzt. Ihr Kind startet bei null.', 'Rückgängig', () => { D = migrate(JSON.parse(before)); save(); rerender(); toast('Wiederhergestellt.'); });
     },
     betareload: () => { if (!confirm('Stand der Testversion durch die Daten der normalen App ersetzen?')) return; const raw = localStorage.getItem(LIVE_KEY); if (!raw) return; localStorage.setItem(STORE_KEY, raw); D = load(); S.unlocked = false; S.view = 'home'; render(); toast('Daten der normalen App übernommen.'); },
     openpath: () => { recReset(); S.view = 'path'; render(); },
@@ -3069,7 +3069,7 @@ focusCardHtml() +
     sendfile: (el) => sendPack(el.dataset.kind, false),
     savefile: (el) => sendPack(el.dataset.kind, true),
     applyvok: () => { const r = mergeVokabeln(S.backupFile, false); S.backupFile = null; toast(r.added + ' neue und ' + r.updated + ' geänderte Vokabeln übernommen. Lernstand unverändert.'); rerender(); },
-    applyls: () => { if (!confirm('Lernstand von Emmas Gerät übernehmen? Der Lernstand auf DIESEM Gerät wird ersetzt.')) return; const n = applyLernstand(S.backupFile); S.backupFile = null; S.tab = 'stats'; toast('Lernstand übernommen' + (n ? ', ' + n + ' Wörter ergänzt' : '') + '.'); render(); },
+    applyls: () => { if (!confirm('Lernstand vom Gerät des Kindes übernehmen? Der Lernstand auf DIESEM Gerät wird ersetzt.')) return; const n = applyLernstand(S.backupFile); S.backupFile = null; S.tab = 'stats'; toast('Lernstand übernommen' + (n ? ', ' + n + ' Wörter ergänzt' : '') + '.'); render(); },
     statday: (el) => { S.statDay = el.dataset.day; rerender(); },
     showsummary: () => { S.showSummary = true; rerender(); },
     copysummary: async () => { try { await navigator.clipboard.writeText(weekSummary()); toast('Kopiert.'); } catch (e) { toast('Kopieren nicht möglich.'); } },
