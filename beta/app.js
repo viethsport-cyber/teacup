@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.1.3-beta.1';
+  const APP_VERSION = '2.2.0-beta.1';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -2238,10 +2238,11 @@ focusCardHtml() +
       '<div class="row"><label class="btn" style="margin:0">' + ic('camera') + 'Foto der Vokabelseite<input type="file" accept="image/*" data-change="photo" hidden></label>' +
       '<label class="btn secondary" style="margin:0">' + ic('file') + 'Textdatei wählen<input type="file" accept=".txt,.csv,.tsv,text/plain,text/csv" data-change="textfile" hidden></label>' +
       '<button class="btn secondary" data-act="pasteclip">' + ic('clip') + 'Aus Zwischenablage</button></div>' +
-      '<p class="small">Das Foto erkennt gedruckten Text (Buchseite). Für Handschrift siehe unten „Karteikarten und Handschrift“.</p>' +
+      '<p class="small">Die Fotoerkennung läuft auf dem Gerät und klappt bei sauberen, geraden Seiten (z. B. Vokabelliste vom Lehrer). Bei Buchseiten mit Bildern und Lautschrift ist <b>Google Lens</b> genauer: Text kopieren, hier „Aus Zwischenablage“, dann „Automatisch zuordnen“.</p>' +
       '<p id="ocrmsg" class="small">' + esc(S.ocrMsg || '') + '</p>' +
       '<label for="imp">Oder eintippen bzw. einfügen – ein Wort pro Zeile:</label><textarea id="imp" placeholder="friend = Freund / Freundin\nto have breakfast = frühstücken\nWhat\'s your name? = Wie heißt du?">' + esc(S.importText) + '</textarea>' +
       '<label class="check"><input type="checkbox" data-change="imppairs" ' + (S.impPairs ? 'checked' : '') + '> Karteikarten: Zeilen abwechselnd Englisch, Deutsch (z. B. aus Google Lens)</label>' +
+      '<button class="btn secondary" data-act="autosort" style="margin-top:6px">' + ic('repeat') + 'Automatisch zuordnen (Text aus Google Lens)</button><p class="small" style="margin-top:4px">Macht aus kopiertem Buchtext Zeilen „englisch = deutsch“. Lautschrift, Seitenzahlen und lange Beispielsätze fallen weg. Danach jede Zeile prüfen; „???“ bitte ergänzen.</p>' +
       '<details><summary><b>Welche Schreibweisen gehen?</b></summary><ul class="small"><li><b>englisch = deutsch</b> (auch mit „ - “ oder „ : “ dazwischen)</li><li>Sätze und Redewendungen genauso: <i>How are you? = Wie geht es dir?</i> (bei Sätzen am besten „=“ verwenden)</li><li>Mehrere Bedeutungen mit Schrägstrich: <i>Freund / Freundin</i></li><li>Mit Hinweis: <i>child ; Kind ; Plural: children</i></li><li>Aus Excel kopiert (Spalten Englisch, Deutsch) oder im vollen Importformat mit Kopfzeile:<br><code>unit;seite;englisch;deutsch;wortart;hinweis;beispiel_en;beispiel_de;aussprache</code></li><li>Textdatei: dieselben Schreibweisen, gespeichert als .txt oder .csv (in Excel: „Speichern unter → CSV“)</li></ul></details>' +
       '<div class="row" style="margin-top:10px"><button class="btn secondary" data-act="sample">20 Testwörter</button><button class="btn" data-act="preview">3. Vorschau</button></div></div>';
     if (S.preview) {
@@ -2268,6 +2269,89 @@ focusCardHtml() +
     h += '<div class="card"><details><summary><b>Genauer: Foto über einen Claude-Chat umwandeln</b></summary><p class="small">Die Fotoerkennung in der App arbeitet ohne Internet auf dem Gerät und braucht oft kleine Korrekturen. Bei schwierigen Seiten ist ein Claude-Chat genauer:</p><ol><li>Vokabelseite fotografieren.</li><li>Foto in einem Claude-Chat hochladen, zusammen mit dem Text unten.</li><li>Ergebnis prüfen, kopieren und oben einfügen.</li></ol>' +
       '<textarea readonly id="photoprompt" style="min-height:220px">' + esc(PHOTO_PROMPT) + '</textarea><button class="btn secondary" data-act="copyprompt" style="margin-top:10px">Text kopieren</button></details></div>';
     return h;
+  }
+
+  // ---------- Automatisch zuordnen (z. B. Text aus Google Lens) ----------
+  // Kopierter Buchtext ist durcheinander: mal „boating lake [ˈbəʊtɪŋ] See zum Rudern“ in einer Zeile,
+  // mal erst alle englischen, dann alle deutschen Wörter. Die App erkennt die Sprache jeder Zeile und bildet Paare.
+  const DE_WORDS = new Set('der die das den dem des ein eine einen einem einer und ist sind ich du er sie es wir ihr nicht kein keine mein meine dein deine sein seine mit von zu zum zur im in auf für aus bei nach vor über unter wie was wer wo woher wohin heißt bitte danke ja nein auch noch sehr gern hier da mag liebe habe hat haben macht spaß uns lass hause schule'.split(' '));
+  const EN_WORDS = new Set('the a an and is are am i you he she it we they my your his her our their not no to of in on at for from with this that what where who how do does don\'t let\'s like love hate here there yes please thank thanks favourite colour'.split(' '));
+  function langScore(line) {
+    const l = line.toLowerCase(), w = l.replace(/[^a-zäöüß' ]/g, ' ').split(/\s+/).filter(Boolean);
+    let de = /[äöüß]/.test(l) ? 2 : 0, en = /'(s|m|re|t|ll|ve|d)\b|\bth/.test(l) ? 1 : 0;
+    w.forEach((x) => { if (DE_WORDS.has(x)) de++; if (EN_WORDS.has(x)) en++; });
+    // typische Buchstabenmuster je Wort
+    w.forEach((x) => {
+      if (/sch|ß/.test(x)) de += 0.5;
+      if (/sch|tz|ß|ei(?!gh)|ie(?!w)|au$|aus|^z|z$|^(ge|be|ver|zer)\w{3,}|(ung|heit|keit|lich|isch|ieren|chen)$/.test(x) && !/tch/.test(x)) de += 0.6;
+      if (/ck|tch|ee|oo|wh|th|ph|w|ay$|ey$|ow$|ue$|y$|(ing|tion|ous|ful|ly)$|^qu/.test(x)) en += 0.6;
+    });
+    if (/^[A-ZÄÖÜ]/.test(line.trim()) && w.length === 1) de += 0.4; // deutsche Nomen groß
+    return { de, en };
+  }
+  const langOf = (line) => { const s = langScore(line); return s.de > s.en ? 'de' : s.en > s.de ? 'en' : '?'; };
+  // „I like … Ich mag …“: Zeile dort trennen, wo Englisch in Deutsch übergeht
+  function splitMixed(line) {
+    const t = line.split(' '); if (t.length < 2) return null;
+    let best = null, bestS = 0;
+    for (let k = 1; k < t.length; k++) {
+      const a = langScore(t.slice(0, k).join(' ')), b = langScore(t.slice(k).join(' '));
+      const sc = Math.min(a.en - a.de, b.de - b.en) + (/^[A-ZÄÖÜ]/.test(t[k]) ? 0.3 : 0) + (/…$/.test(t[k - 1]) ? 0.2 : 0) + (/[.!?]$/.test(t[k - 1]) ? 0.3 : 0);
+      if (sc > 0.5 && sc > bestS) { bestS = sc; best = [t.slice(0, k).join(' '), t.slice(k).join(' ')]; }
+    }
+    return best;
+  }
+  function cleanLensLine(t) {
+    return t.replace(/\[[^\]]*\]/g, ' ').replace(/^[\s•·*▪◦\-–—\d.)]+/, '').replace(/\((pl|sg)\)/gi, '').replace(/\s+/g, ' ').trim();
+  }
+  // Englischen Beispielsatz hinter der deutschen Bedeutung abschneiden
+  function cutEnglishTail(de) {
+    const t = de.split(' '); let best = 0, bestS = -Infinity;
+    for (let k = 1; k < t.length; k++) {
+      const a = langScore(t.slice(0, k).join(' ')), b = langScore(t.slice(k).join(' '));
+      if (!/[A-Z]/.test(t[k][0]) || t.length - k < 3 || b.en - b.de <= 1.5) continue;
+      const sc = (a.de - a.en) + (b.en - b.de);
+      if (sc > bestS) { bestS = sc; best = k; }
+    }
+    return best ? t.slice(0, best).join(' ') : de;
+  }
+  function autoSortText(text) {
+    const out = [], items = [];
+    for (const raw of text.split(/\r?\n/)) {
+      const t = raw.trim(); if (!t) continue;
+      if (/=|\s;\s|\t/.test(t)) { out.push(t); continue; } // schon zugeordnet
+      // Zeile mit Lautschrift: links Englisch, rechts Deutsch
+      const m = t.match(/^(.+?)\s*\[[^\]]+\]\s*(.+)$/);
+      if (m && cleanLensLine(m[2])) { out.push(cleanLensLine(m[1]) + ' = ' + cutEnglishTail(cleanLensLine(m[2]))); continue; }
+      const c = cleanLensLine(t);
+      if (!c || !/[a-zäöüß]{2,}/i.test(c)) continue;                       // Seitenzahlen, Zeichen-Reste
+      if (/^(vocabulary|unit \d+|pick-up|station \d+|check-in|one hundred|seite \d+)\b/i.test(c)) continue; // Überschriften
+      const sp = c.split(' ').length <= 14 ? splitMixed(c) : null;
+      if (sp && sp[0].split(' ').length <= 8) { out.push(sp[0] + ' = ' + sp[1]); continue; }
+      if (c.split(' ').length > 8) continue;                                   // lange Beispielsätze weglassen
+      items.push({ t: c, l: langOf(c) });
+    }
+    // Blöcke (erst mehrere Englisch, dann gleich viele Deutsch) oder abwechselnd
+    let i = 0;
+    // Block: erste Hälfte ohne Deutsch, zweite Hälfte ohne Englisch, überwiegend eindeutig erkannt
+    const blockAt = (i) => {
+      for (let n = (items.length - i) - ((items.length - i) % 2); n >= 4; n -= 2) {
+        const a = items.slice(i, i + n / 2), b = items.slice(i + n / 2, i + n);
+        if (a.some((x) => x.l === 'de') || b.some((x) => x.l === 'en')) continue;
+        if (a.filter((x) => x.l === 'en').length + b.filter((x) => x.l === 'de').length >= n * 0.6) return n;
+      }
+      return 0;
+    };
+    while (i < items.length) {
+      const n = blockAt(i);
+      if (n) { for (let q = 0; q < n / 2; q++) out.push(items[i + q].t + ' = ' + items[i + n / 2 + q].t); i += n; continue; }
+      const a = items[i], b = items[i + 1];
+      if (b && a.l !== 'de' && b.l !== 'en') { out.push(a.t + ' = ' + b.t); i += 2; }
+      else if (b && a.l === 'de' && b.l !== 'de') { out.push(b.t + ' = ' + a.t); i += 2; }
+      else { out.push(a.t + ' = ???'); i++; }
+    }
+    // „Ort; Stelle; Platz“ → „Ort / Stelle / Platz“ (Semikolon trennt sonst Spalten)
+    return out.map((l) => (l.includes(' = ') && !/\s;\s/.test(l) ? l.replace(/\s*;\s*/g, ' / ') : l)).join('\n');
   }
   function addImportText(txt) {
     const cur = ($('#imp') ? $('#imp').value : S.importText).trim();
@@ -2343,7 +2427,7 @@ focusCardHtml() +
       const { data } = await w.recognize(img);
       await w.terminate();
       const r = ocrLinesToText(data.lines || []);
-      if (!r.text) { setMsg('Auf dem Foto wurden keine Vokabeln erkannt. Tipp: gerade von oben, hell, nur eine Spalte pro Foto.'); return; }
+      if (!r.text) { setMsg('Auf dem Foto wurden keine Vokabeln erkannt. Tipp: gerade von oben, hell, ohne Schatten. Bei Buchseiten mit Bildern klappt Google Lens + „Automatisch zuordnen“ besser.'); return; }
       if (r.page && !S.impPage) S.impPage = r.page;
       addImportText(r.text);
       setMsg(r.text.split('\n').length + ' Zeilen erkannt. Bitte jede Zeile mit dem Buch vergleichen und im Textfeld korrigieren, dann „Vorschau“.');
@@ -3030,6 +3114,12 @@ focusCardHtml() +
     cancelimport: () => { S.preview = null; rerender(); },
     doimport: () => doImport(),
     copycard: async () => { try { await navigator.clipboard.writeText(CARD_PROMPT); toast('Kopiert.'); } catch (e) { $('#cardprompt').select(); toast('Bitte markierten Text kopieren.'); } },
+    autosort: () => {
+      syncImportFields(); if (!S.importText.trim()) return toast('Bitte zuerst Text einfügen.');
+      S.importText = autoSortText(S.importText); S.impPairs = false; S.preview = null;
+      const miss = (S.importText.match(/= \?\?\?/g) || []).length;
+      S.ocrMsg = 'Automatisch zugeordnet: ' + S.importText.split('\n').filter(Boolean).length + ' Zeilen' + (miss ? ', davon ' + miss + ' ohne Deutsch („???“ bitte ergänzen)' : '') + '. Bitte prüfen, dann „Vorschau“.'; rerender();
+    },
     pasteclip: async () => {
       try {
         const t = await navigator.clipboard.readText();
@@ -3148,7 +3238,7 @@ focusCardHtml() +
   if (!D.autoTipsV1) { D.vocab.forEach((v) => { if (!v.tip) { v.tip = autoTip(v.en); v.tipAuto = !!v.tip; if (v.tip && !v.exEn && !v.exDe) v.checked = true; } }); D.autoTipsV1 = true; save(); }
 
   // Für die automatischen Tests
-  window.__teacup = { gradeEn, matchDe, matchEnSpeech, trackWrite, weakCats, catsIn, data: () => D, version: APP_VERSION, syllables, buildLesson: (ids) => buildLesson(ids.map(vocabById)), stations, lesson: () => S.L && { i: S.L.i, n: S.L.tasks.length, t: S.L.tasks[S.L.i] }, todayStr: today, openChestForTest: () => { const v = S.view; openChest(); S.view = v; }, gapFor: (id) => gapFor(vocabById(id)), state: () => S };
+  window.__teacup = { autoSortText, gradeEn, matchDe, matchEnSpeech, trackWrite, weakCats, catsIn, data: () => D, version: APP_VERSION, syllables, buildLesson: (ids) => buildLesson(ids.map(vocabById)), stations, lesson: () => S.L && { i: S.L.i, n: S.L.tasks.length, t: S.L.tasks[S.L.i] }, todayStr: today, openChestForTest: () => { const v = S.view; openChest(); S.view = v; }, gapFor: (id) => gapFor(vocabById(id)), state: () => S };
   // Einmalig nach dem Update auf 2.0.3: heute schon freiwillig Geübtes nachträglich in die Lernkartei übernehmen
   if (!D.catchup203) {
     const t = today(), skip = ['probe', 'boss', 'game'];
