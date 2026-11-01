@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.3.0-beta.3';
+  const APP_VERSION = '2.3.0-beta.4';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -1827,9 +1827,9 @@
       (named ? '<b class="petname">' + esc(g.petName) + '</b>' : '<b class="petname">Dein Begleiter</b>') +
       '<span class="small">' + STAGE_NAME[st] + (nextGrow() ? ' · wächst in ' + nextGrow() + (nextGrow() === 1 ? ' Lerntag' : ' Lerntagen') : ' · voll ausgewachsen') + '</span>' +
       '<div class="petstats"><span class="pill star">' + ic('star') + g.stars + '</span><span class="pill">' + ic('party') + 'Serie ' + sk.n + '</span></div>' +
-      '<span class="small">' + (sk.n ? 'Joker diese Woche: ' + (sk.jokerFree ? 'frei' : 'benutzt') : sk.lost ? 'Neue Serie – heute geht\'s los!' : 'Schaff dein Tagesziel und starte eine Serie.') + '</span></div></div>';
+      (sk.n ? '<span class="small">Joker diese Woche: ' + (sk.jokerFree ? 'frei' : 'benutzt') + '</span>' : st === 0 && !named ? '' : '<span class="small">' + (sk.lost ? 'Neue Serie – heute geht\'s los!' : 'Schaff dein Tagesziel und starte eine Serie.') + '</span>') + '</div></div>';
     if (!named && st >= 1) h += '<div class="row" style="margin-top:8px"><input type="text" id="petname" maxlength="16" placeholder="Wie soll dein Begleiter heißen?" style="flex:2 1 160px"><button class="btn small" data-act="namepet">Taufen</button></div>';
-    if (!named && st === 0) h += '<p class="small" style="margin:6px 0 0">Schaff dein Tagesziel – dann schlüpft dein Begleiter aus dem Ei!</p>';
+    if (!named && st === 0) h += '<p class="small" style="margin:6px 0 0">Schaff dein Tagesziel – dann schlüpft dein Begleiter aus dem Ei und deine Serie beginnt!</p>';
     if (ich) return h + '</div>';
     h += '<div class="row" style="margin-top:10px"><b>Tagesziel</b><span class="spacer"></span><span>' + mins + ' von ' + goal + ' Min.</span></div><div class="progress" style="margin-top:6px"><div style="width:' + Math.min(100, Math.round((mins / goal) * 100)) + '%"></div></div>' +
       (mins >= goal ? '<p class="center small" style="margin-bottom:0"><b>Für heute geschafft!</b>' + ' Weiterlernen ist freiwillig und bringt weiter Sterne.' + '</p>' : '');
