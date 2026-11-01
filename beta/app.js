@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.3.0-beta.4';
+  const APP_VERSION = '2.3.0-beta.5';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -3274,12 +3274,18 @@
     // Nur der eigene Service Worker zählt (die normale App und die Testversion liegen unter derselben Adresse)
     const ownSW = () => { const c = navigator.serviceWorker.controller; return !!c && c.scriptURL === new URL('sw.js', location.href).href; };
     navigator.serviceWorker.register('sw.js').then((reg) => {
-      const offer = (w) => toast('Neue Version verfügbar.', 'Aktualisieren', () => w.postMessage('skipWaiting'));
-      if (reg.waiting && ownSW()) offer(reg.waiting);
+      // Updates von selbst einspielen, solange keine Runde, Lektion, Dusche oder kein Spiel läuft – sonst nachfragen
+      const busy = () => !!(S.R || S.L || S.SH || S.G) || !['home', 'parent', 'path', 'album', 'badges', 'shop', 'games'].includes(S.view);
+      const apply = (w) => { if (!busy()) w.postMessage('skipWaiting'); else toast('Neue Version verfügbar.', 'Aktualisieren', () => w.postMessage('skipWaiting')); };
+      if (reg.waiting && ownSW()) apply(reg.waiting);
       reg.addEventListener('updatefound', () => {
         const w = reg.installing;
-        w.addEventListener('statechange', () => { if (w.state === 'installed' && ownSW()) offer(w); });
+        w.addEventListener('statechange', () => { if (w.state === 'installed' && ownSW()) apply(w); });
       });
+      // Beim Zurückkehren in die App und alle 30 Minuten nach einer neuen Version schauen
+      const check = () => reg.update().catch(() => {});
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) { check(); if (reg.waiting && ownSW() && !busy()) reg.waiting.postMessage('skipWaiting'); } });
+      setInterval(check, 30 * 60000);
     }).catch(() => {});
     // Nur nach einem echten Update neu laden, nicht bei der allerersten Installation.
     let reloaded = false;
