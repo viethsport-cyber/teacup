@@ -406,3 +406,15 @@ pre.summary { white-space: pre-wrap; font: inherit; font-size: 16px; background:
 .gobtn small { color: inherit !important; font-size: 1rem; font-weight: 700; opacity: .95; }
 .heropet { width: 140px; height: 140px; top: 14px; right: 14px; background: rgba(255,255,255,.35); }
 @media (max-width: 480px) { .heropet { width: 96px; height: 96px; } .home-hero .hello { right: 110px; } }
+/* Begleiter steht ohne eigenen Hintergrund direkt in der Skyline */
+.heropet { top: auto; bottom: 4px; right: 6px; width: 150px; height: 120px; background: none; border-radius: 0; overflow: visible; }
+@media (max-width: 480px) {
+  .home-hero { height: 165px; }
+  .heropet { width: 112px; height: 90px; right: 2px; }
+  .home-hero .hello { right: 96px; }
+  .home-hero .hello b { font-size: 1.35rem; }
+  .goalcard { padding-top: 10px; padding-bottom: 10px; }
+  .card.hint { padding: 10px 12px; }
+  .gobtn { min-height: 72px; }
+}
+body:has(.tabbar) #toast { bottom: calc(88px + env(safe-area-inset-bottom)); }

@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.3.0-beta.1';
+  const APP_VERSION = '2.3.0-beta.2';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -729,7 +729,7 @@
     const name = D.settings.nickname ? ', ' + esc(D.settings.nickname) : '';
     let h = '<div class="hero-city home-hero">' + SKYLINE + '<div class="hello"><b>Hello' + name + '!</b><span>' + (g.petName ? esc(g.petName) + ' wartet auf dich.' : 'Schön, dass du da bist.') + '</span>' +
       '<div class="petstats"><span class="pill star">' + ic('star') + g.stars + '</span><span class="pill">' + ic('party') + 'Serie ' + sk.n + '</span></div></div>' +
-      '<button class="heropet" data-act="hometab" data-id="ich" aria-label="Zu deinem Begleiter">' + petSvg(petStage(), g.equipped, g.equipped.bg) + '</button></div>';
+      '<button class="heropet" data-act="hometab" data-id="ich" aria-label="Zu deinem Begleiter">' + petSvg(petStage(), Object.assign({}, g.equipped, { deco: '' }), 'none') + '</button></div>';
     h += '<div class="card goalcard"><div class="row"><b>Tagesziel</b><span class="spacer"></span><span>' + mins + ' von ' + goal + ' Min.</span></div><div class="progress" style="margin-top:6px"><div style="width:' + Math.min(100, Math.round((mins / goal) * 100)) + '%"></div></div>' +
       (mins >= goal ? '<p class="small center" style="margin:8px 0 0"><b>Für heute geschafft!</b> Weiterlernen bringt weiter Sterne. Unter „Spielen“ ist alles offen.</p>' : '') + '</div>';
     if (!D.vocab.length) return h + '<div class="card soft center"><p><b>Noch keine Vokabeln da.</b></p><p>Die Wörter werden im Elternbereich (Zahnrad oben rechts) eingetragen.</p></div>';
@@ -1791,7 +1791,8 @@
       beach: '<rect width="200" height="160" fill="#cdeefd"/><path d="M0 105h200v20H0z" fill="#7fc8e8"/><path d="M0 125h200v35H0z" fill="#f6e2b3"/><circle cx="165" cy="30" r="14" fill="#ffd26a"/>',
       night: '<rect width="200" height="160" fill="#1f2a4a"/><path d="M0 130h200v30H0z" fill="#2c3b5c"/><circle cx="160" cy="30" r="12" fill="#f4f1d0"/><circle cx="30" cy="25" r="2" fill="#fff"/><circle cx="70" cy="45" r="1.5" fill="#fff"/><circle cx="110" cy="20" r="2" fill="#fff"/><circle cx="185" cy="70" r="1.5" fill="#fff"/>'
     };
-    let s = '<svg viewBox="0 0 200 160" class="petsvg" aria-hidden="true">' + (bgs[bg] || bgs.london);
+    // bg „none“: nur die Figur, ohne eigenen Hintergrund (für die Skyline auf der Startseite)
+    let s = '<svg viewBox="0 0 200 160" class="petsvg" aria-hidden="true">' + (bg === 'none' ? '' : (bgs[bg] || bgs.london));
     if (eq.deco === 'cushion') s += '<ellipse cx="100" cy="138" rx="58" ry="10" fill="#f7a8c8"/>';
     if (eq.deco === 'plant') s += '<rect x="168" y="112" width="16" height="18" rx="3" fill="#c98a5b"/><path d="M176 112c-10-14-4-26 0-30 4 4 10 16 0 30zM176 110c-14-6-16-16-14-20 6 0 14 6 14 20zM176 110c14-6 16-16 14-20-6 0-14 6-14 20z" fill="#5fae6b"/>';
     if (eq.deco === 'lamp') s += '<rect x="22" y="80" width="4" height="50" fill="#8a7a6a"/><path d="M10 80h28l-6-18H16z" fill="#ffd98a"/>';
