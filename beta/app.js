@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.2.0-beta.1';
+  const APP_VERSION = '2.3.0-beta.1';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -199,6 +199,7 @@
     clip: '<path d="M9 4h6v3H9zM9 5.5H6a1 1 0 0 0-1 1V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6.5a1 1 0 0 0-1-1h-3M8.5 12h7M8.5 16h5"/>',
     lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
     trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+    home: '<path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z"/>',
     head: '<path d="M9 21v-3.5C5.5 16 4 13.2 4 10a8 8 0 0 1 16 0c0 1.2.6 2 1.4 3.2.4.6 0 1.3-.7 1.3H19v2a2 2 0 0 1-2 2h-2v2.5"/><path d="M10 8.5h4M12 6.5v4"/>',
     headphones: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/>'
   };
@@ -701,41 +702,93 @@
   function boxesHtml(c) {
     return '<div class="boxes">' + [1, 2, 3, 4, 5, 6].map((b) => '<div class="f' + b + '"><b>' + c[b] + '</b><span>' + (b === 6 ? 'Sitzt' : 'Fach ' + b) + '</span></div>').join('') + '</div>';
   }
-  function renderHome() {
-    const P = plan();
+  // ---------- Startseite: vier Bereiche (Heute, Üben, Spielen, Ich) ----------
+  const HOME_TABS = [['heute', 'Heute', 'home'], ['ueben', 'Üben', 'book'], ['spielen', 'Spielen', 'star'], ['ich', 'Ich', 'head']];
+  function tabbarHtml() {
+    const cur = S.homeTab || 'heute', lock = !unlocked();
+    return '<nav class="tabbar" aria-label="Bereiche">' + HOME_TABS.map(([k, l, i]) => '<button class="tab' + (k === cur ? ' on' : '') + '" data-act="hometab" data-id="' + k + '"' + (k === cur ? ' aria-current="page"' : '') + '>' + ic(i) + '<span>' + l + (k === 'spielen' && lock ? ' ' + ic('lock', 'lockic') : '') + '</span></button>').join('') + '</nav>';
+  }
+  // Was ist als Nächstes dran? Reihenfolge: Test-Turbo → Tagesplan → Schreib-Check → Lernpfad → Schatztruhe
+  function nextPathStep() {
+    const units = pathUnits(); if (!units.length) return null;
+    const u = units.find((x) => x.id === S.pathUnit) || units.find((x) => x.status === 'aktuell') || units[0];
+    const st = stations(u.id), ps = pathState(u.id), idx = st.findIndex((_, i) => !ps.done[i]);
+    return idx < 0 ? null : { unitId: u.id, idx, label: 'Lernpfad · Station ' + (idx + 1) };
+  }
+  function nextSteps() {
+    const steps = [], P = plan(), tst = nextTest(), g = G();
+    if (tst && turboActive(tst) && turboOpen(tst).length) steps.push({ act: 'startturbo', label: 'Test-Turbo', sub: turboOpen(tst).length + ' Testwörter für ' + esc(tst.name || 'den Vokabeltest') });
+    if (P.list.length) steps.push({ act: 'start', label: 'Tagesplan', sub: P.list.length + ' Wörter · ca. ' + Math.max(3, Math.round(P.list.length * 0.6)) + ' Min.' });
+    if (kcPending().length) steps.push({ act: 'kcheck', label: 'Schreib-Check', sub: kcPending().length + ' Wörter, die du schon kennst' });
+    const ps = nextPathStep(); if (ps) steps.push({ act: 'gopath', label: ps.label, sub: 'Kurze Lektion mit Hören, Sprechen und Schreiben' });
+    if (g.chestReady === today()) steps.push({ act: 'openchest', label: 'Schatztruhe', sub: 'Deine Belohnung wartet!' });
+    return steps;
+  }
+  function heuteHtml() {
+    const P = plan(), mins = minutesToday(), goal = D.settings.dailyMinutes, g = G(), sk = streakInfo();
     const name = D.settings.nickname ? ', ' + esc(D.settings.nickname) : '';
-    const mins = minutesToday(), goal = D.settings.dailyMinutes;
+    let h = '<div class="hero-city home-hero">' + SKYLINE + '<div class="hello"><b>Hello' + name + '!</b><span>' + (g.petName ? esc(g.petName) + ' wartet auf dich.' : 'Schön, dass du da bist.') + '</span>' +
+      '<div class="petstats"><span class="pill star">' + ic('star') + g.stars + '</span><span class="pill">' + ic('party') + 'Serie ' + sk.n + '</span></div></div>' +
+      '<button class="heropet" data-act="hometab" data-id="ich" aria-label="Zu deinem Begleiter">' + petSvg(petStage(), g.equipped, g.equipped.bg) + '</button></div>';
+    h += '<div class="card goalcard"><div class="row"><b>Tagesziel</b><span class="spacer"></span><span>' + mins + ' von ' + goal + ' Min.</span></div><div class="progress" style="margin-top:6px"><div style="width:' + Math.min(100, Math.round((mins / goal) * 100)) + '%"></div></div>' +
+      (mins >= goal ? '<p class="small center" style="margin:8px 0 0"><b>Für heute geschafft!</b> Weiterlernen bringt weiter Sterne. Unter „Spielen“ ist alles offen.</p>' : '') + '</div>';
+    if (!D.vocab.length) return h + '<div class="card soft center"><p><b>Noch keine Vokabeln da.</b></p><p>Die Wörter werden im Elternbereich (Zahnrad oben rechts) eingetragen.</p></div>';
+    const tst = nextTest();
+    if (tst) { const dl = daysTo(tst); h += '<div class="card hint">' + ic('flag') + '<span><b>' + esc(tst.name || 'Vokabeltest') + ' ' + (dl === 0 ? 'heute' : dl === 1 ? 'morgen' : 'am ' + fmtShort(tst.date)) + '!</b> ' + (turboActive(tst) ? 'Der Test-Turbo ist dran.' + (dl >= 1 ? ' Den Probetest findest du unter „Üben“.' : '') : 'Der Test-Turbo startet am ' + fmtShort(addDays(tst.date, -3)) + '.') + '</span></div>'; }
+    const n = kcCandidates().length;
+    if (n >= 10) h += '<button class="card hint linkcard" data-act="kopfstart">' + ic('head') + '<span><b>' + n + ' neue Wörter sind da!</b> Kennst du schon welche? Hier sortieren.</span></button>';
+    const steps = nextSteps(), s0 = steps[0];
+    if (s0) {
+      h += '<button class="btn big gobtn" data-act="' + s0.act + '">' + ic('star') + '<span>Los geht\'s!<small>' + s0.label + ' · ' + s0.sub + '</small></span></button>';
+      if (steps.length > 1) h += '<p class="small center nextline">Danach: ' + steps.slice(1, 4).map((x) => esc(x.label)).join(' → ') + '</p>';
+    } else h += '<div class="card good center"><p class="feedback">Alles für heute erledigt! ' + ic('party') + '</p><p style="margin-bottom:0">Freiwillig mehr? Schau unter „Üben“ – oder gönn dir ein Spiel.</p></div>';
+    if (D.settings.paperAllowed && (s0 && ['start', 'startturbo', 'kcheck'].includes(s0.act))) h += '<label class="check center-check"><input type="checkbox" data-change="paper" ' + (D.settings.paperChosen ? 'checked' : '') + '> Ich schreibe auf Papier</label>';
+    return h;
+  }
+  const tile = (act, icon, title, sub, id, cls) => '<button class="tile' + (cls ? ' ' + cls : '') + '" data-act="' + act + '"' + (id ? ' data-id="' + esc(id) + '"' : '') + '>' + ic(icon) + '<b>' + title + '</b>' + (sub ? '<small>' + sub + '</small>' : '') + '</button>';
+  function uebenHtml() {
+    const nFresh = freshTagged().length, nAll = allPool().length, cycleLeft = allPool().filter((v) => !(D.allCycle || []).includes(v.id)).length;
+    const n = kcCandidates().length, m = kcPending().length, ps = nextPathStep(), tst = nextTest();
+    let h = '<div class="sectionhead"><h2>' + ic('book') + 'Üben</h2><p class="small">Alles hier zählt auch für deine Lernkartei.</p></div>';
+    if (!D.vocab.length) return h + '<div class="card soft center"><p>Noch keine Vokabeln da.</p></div>';
+    if (tst && turboActive(tst)) h += turboCardHtml();
+    h += '<h3 class="tilehead">Wörter lernen</h3><div class="tiles">' +
+      tile('start', 'repeat', 'Tagesplan', plan().list.length ? plan().list.length + ' Wörter dran' : 'erledigt ✓') +
+      (nFresh ? tile('startfresh', 'star', 'Neue Wörter', nFresh + ' neu') : '') +
+      (nAll ? tile('startall', 'book', 'Alle Wörter', cycleLeft ? 'noch ' + cycleLeft + ' offen' : 'Runde von vorn') : '') +
+      (n || m ? tile(m && !n ? 'kcheck' : 'kopfstart', 'head', 'Kennst du schon?', n ? n + ' sortieren' : m + ' zum Schreib-Check') : '') +
+      weakCats().filter((w) => catWords(w.cat.id).length).slice(0, 2).map((w) => tile('focus', 'target', 'Schwerpunkt', esc(w.cat.label), w.cat.id)).join('') + '</div>';
+    h += '<h3 class="tilehead">Anders lernen</h3><div class="tiles">' +
+      (pathUnits().length ? tile('openpath', 'flag', 'Lernpfad', ps ? 'Station ' + (ps.idx + 1) : 'alle Stationen geschafft') : '') +
+      ('speechSynthesis' in window ? tile('openshower', 'headphones', 'Vokabel-Dusche', 'zurücklehnen und zuhören') : '') + '</div>';
+    return h;
+  }
+  function spielenHtml() {
+    const g = G(), open = unlocked(), mins = minutesToday(), goal = D.settings.dailyMinutes;
+    let h = '<div class="sectionhead"><h2>' + ic('star') + 'Spielen</h2><p class="small">Erst lernen, dann spielen.</p></div>';
+    if (!open) h += '<div class="card hint">' + ic('lock') + '<span><b>Noch ' + Math.max(1, goal - mins) + ' Minuten lernen</b> – dann öffnen sich Schatztruhe, Minispiele und Shop.</span></div>';
+    if (g.chestReady === today()) h += '<button class="btn big chestbtn" data-act="openchest">' + ic('party') + 'Schatztruhe öffnen!</button>';
+    h += '<div class="tiles">' + tile('opengames', 'star', 'Minispiele', open ? '3 bringen heute Sterne' : 'nach dem Tagesziel', '', open ? '' : 'locked') +
+      tile('openshop', 'cup', 'Shop', g.stars + ' Sterne', '', open ? '' : 'locked') + '</div>';
+    return h;
+  }
+  function ichHtml() {
+    const g = G();
+    let h = '<div class="sectionhead"><h2>' + ic('head') + (D.settings.nickname ? esc(D.settings.nickname) : 'Ich') + '</h2></div>' + petCardHtml(true);
+    h += '<div class="tiles">' + tile('openalbum', 'book', 'Album', Object.keys(g.album).length + ' von ' + CARDS.length) + tile('openbadges', 'flag', 'Abzeichen', Object.keys(g.badges).length + ' von ' + BADGES.length) + '</div>';
+    h += KARTEI_CARD() + (installEvt ? '<button class="btn secondary big" data-act="install">' + ic('download') + 'App auf dem Startbildschirm installieren</button>' : '');
+    return h;
+  }
+  const KARTEI_CARD = () => '<div class="card"><h3 style="margin-top:0">Deine Lernkartei<span class="spacer"></span><button class="helpbtn" data-act="karteihelp" aria-label="Was bedeutet das?" aria-expanded="' + !!S.karteiHelp + '">?</button></h3>' + boxesHtml(boxCounts(true)) +
+        unitProgressHtml() + (S.karteiHelp ? '<div class="tip" style="margin-bottom:0">' + ic('bulb') + '<span>Jedes Wort wohnt in einem <b>Fach</b>. Schreibst du es richtig, rückt es ein Fach weiter und kommt erst später wieder dran: Fach 1 morgen, Fach 2 nach 2 Tagen, Fach 3 nach 4, Fach 4 nach 7, Fach 5 nach 14 Tagen. Danach <b>sitzt</b> es! Ist es falsch, startet es wieder in Fach 1 – so übst du schwierige Wörter öfter. Übst du mehr als den Tagesplan, zählt das auch: Jedes Wort kann pro Tag ein Fach weiterrücken.</span></div>' : '') + '</div>';
+  function renderHome() {
     const dot = backupDue() || openReports().length || D.vocab.some(needsReview);
-    let main;
-    if (!D.vocab.length) {
-      main = '<div class="card soft center"><p><b>Noch keine Vokabeln da.</b></p><p>Die Wörter werden im Elternbereich (Zahnrad oben rechts) eingetragen.</p></div>';
-    } else {
-      // Emma wählt: Tagesplan (Mix), nur neue Vokabeln oder alle Vokabeln (Testvorbereitung)
-      const nFresh = freshTagged().length, nAll = allPool().length;
-      const cycleLeft = allPool().filter((v) => !(D.allCycle || []).includes(v.id)).length;
-      let h = '';
-      if (P.list.length) {
-        const parts = [];
-        if (P.hw) parts.push(P.hw + ' Wiederholung neue Vokabeln');
-        if (P.due) parts.push(Math.min(P.due, roundMax()) + ' Wiederholung');
-        if (P.fresh) parts.push(P.fresh + ' neu');
-        if (P.focusIds.size) parts.push(P.focusIds.size + ' Schwerpunkt');
-        h += '<h2 style="margin-top:0">Heute dran: ' + P.list.length + ' Wörter</h2><p class="muted">' + esc(parts.join(' · ')) + '</p>' +
-          '<button class="btn big" data-act="start">' + ic('book') + 'Mein Tagesplan</button>';
-      } else h += '<p class="feedback">Tagesplan erledigt! ' + ic('party') + '</p><p class="center">Du kannst trotzdem weiterüben:</p>';
-      if (nFresh) h += '<button class="btn big ' + (P.list.length ? 'secondary' : '') + '" data-act="startfresh" style="margin-top:10px">' + ic('star') + 'Nur neue Vokabeln · ' + nFresh + '</button>';
-      if (nAll) h += '<button class="btn big secondary" data-act="startall" style="margin-top:10px">' + ic('repeat') + 'Alle Vokabeln üben</button><p class="small center" style="margin-bottom:0">Für Tests: geht alle ' + nAll + ' Wörter durch (' + (cycleLeft ? 'noch ' + cycleLeft + ' offen' : 'alle geschafft, nächste Runde beginnt von vorn') + '). Zählt auch für die Lernkartei.</p>';
-      main = '<div class="card' + (P.list.length ? '' : ' good') + '">' + h +
-        (D.settings.paperAllowed ? '<label class="check" style="margin-top:8px"><input type="checkbox" data-change="paper" ' + (D.settings.paperChosen ? 'checked' : '') + '> Ich schreibe auf Papier</label>' : '') + '</div>';
-    }
+    const tab = S.homeTab || 'heute';
+    const body = tab === 'ueben' ? uebenHtml() : tab === 'spielen' ? spielenHtml() : tab === 'ich' ? ichHtml() : heuteHtml();
     app.innerHTML =
       (BETA ? '<div class="betabar">Testversion – eigener Speicher, die normale App bleibt unverändert.</div>' : '') +
       '<div class="topbar"><h1>' + ic('cup') + 'Teacup</h1><button class="iconbtn" data-act="parent" aria-label="Elternbereich">' + ic('gear') + (dot ? '<span class="badge-dot"></span>' : '') + '</button></div>' +
-      '<div class="hero-city">' + SKYLINE + '<div class="hello"><b>Hello' + name + '!</b><span>Schön, dass du da bist.</span></div></div>' + turboCardHtml() + main + kopfCardHtml() + petCardHtml() + pathCardHtml() + showerCardHtml() +
-focusCardHtml() +
-      '<div class="card"><h3 style="margin-top:0">Deine Lernkartei<span class="spacer"></span><button class="helpbtn" data-act="karteihelp" aria-label="Was bedeutet das?" aria-expanded="' + !!S.karteiHelp + '">?</button></h3>' + boxesHtml(boxCounts(true)) +
-        unitProgressHtml() + (S.karteiHelp ? '<div class="tip" style="margin-bottom:0">' + ic('bulb') + '<span>Jedes Wort wohnt in einem <b>Fach</b>. Schreibst du es richtig, rückt es ein Fach weiter und kommt erst später wieder dran: Fach 1 morgen, Fach 2 nach 2 Tagen, Fach 3 nach 4, Fach 4 nach 7, Fach 5 nach 14 Tagen. Danach <b>sitzt</b> es! Ist es falsch, startet es wieder in Fach 1 – so übst du schwierige Wörter öfter. Übst du mehr als den Tagesplan, zählt das auch: Jedes Wort kann pro Tag ein Fach weiterrücken.</span></div>' : '') + '</div>' +
-      (installEvt ? '<button class="btn secondary big" data-act="install">' + ic('download') + 'App auf dem Startbildschirm installieren</button>' : '');
+      '<div class="homebody">' + body + '</div>' + tabbarHtml();
   }
 
   function unitProgressHtml() {
@@ -1767,7 +1820,7 @@ focusCardHtml() +
     return s + '</svg>';
   }
   const unlocked = () => goalReachedToday();
-  function petCardHtml() {
+  function petCardHtml(ich) {
     const g = G(), st = petStage(), sk = streakInfo(), mins = minutesToday(), goal = D.settings.dailyMinutes;
     const named = g.petName;
     let h = '<div class="card petcard"><div class="petrow"><div class="petbox">' + petSvg(st, g.equipped, g.equipped.bg) + '</div><div class="petinfo">' +
@@ -1777,6 +1830,7 @@ focusCardHtml() +
       '<span class="small">' + (sk.n ? 'Joker diese Woche: ' + (sk.jokerFree ? 'frei' : 'benutzt') : sk.lost ? 'Neue Serie – heute geht\'s los!' : 'Schaff dein Tagesziel und starte eine Serie.') + '</span></div></div>';
     if (!named && st >= 1) h += '<div class="row" style="margin-top:8px"><input type="text" id="petname" maxlength="16" placeholder="Wie soll dein Begleiter heißen?" style="flex:2 1 160px"><button class="btn small" data-act="namepet">Taufen</button></div>';
     if (!named && st === 0) h += '<p class="small" style="margin:6px 0 0">Schaff dein Tagesziel – dann schlüpft dein Begleiter aus dem Ei!</p>';
+    if (ich) return h + '</div>';
     h += '<div class="row" style="margin-top:10px"><b>Tagesziel</b><span class="spacer"></span><span>' + mins + ' von ' + goal + ' Min.</span></div><div class="progress" style="margin-top:6px"><div style="width:' + Math.min(100, Math.round((mins / goal) * 100)) + '%"></div></div>' +
       (mins >= goal ? '<p class="center small" style="margin-bottom:0"><b>Für heute geschafft!</b>' + ' Weiterlernen ist freiwillig und bringt weiter Sterne.' + '</p>' : '');
     if (g.chestReady === today()) h += '<button class="btn big chestbtn" data-act="openchest" style="margin-top:10px">' + ic('party') + 'Schatztruhe öffnen!</button>';
@@ -2870,6 +2924,8 @@ focusCardHtml() +
   const ACT = {
     parent: () => { S.view = 'parent'; render(); },
     home: () => { shStop(); S.view = 'home'; S.R = null; render(); },
+    hometab: (el) => { S.homeTab = el.dataset.id; S.view = 'home'; render(); window.scrollTo(0, 0); },
+    gopath: () => { const ps = nextPathStep(); if (ps) { S.pathUnit = ps.unitId; startLesson(ps.unitId, ps.idx); } },
     kopfstart: () => { const l = kcCandidates(); if (!l.length) return; S.K = { list: l.map((v) => v.id), i: 0, inN: 0, outN: 0 }; S.view = 'kopf'; render(); },
     kopfin: () => { const K = S.K; KC().d[K.list[K.i]] = 'in'; K.inN++; K.i++; save(); render(); },
     kopfout: () => { const K = S.K; KC().d[K.list[K.i]] = 'out'; K.outN++; K.i++; save(); render(); },
