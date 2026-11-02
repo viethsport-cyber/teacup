@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.3.0';
+  const APP_VERSION = '2.3.1';
   const STORE_KEY = 'teacup-data';
   const LIVE_KEY = 'teacup-data';
   const BETA = false;
@@ -1866,6 +1866,32 @@
       (r.card ? '<div class="card center"><p class="feedback">Neue Albumkarte!</p>' + cardHtml(r.card, true) + '</div>' : '<div class="card center"><p class="feedback">' + ic('star') + ' +' + r.stars + ' Sterne!</p><p>Super gemacht. Morgen wartet die nächste Truhe.</p></div>') +
       '<button class="btn big" data-act="home">Weiter</button>';
   }
+
+  // Steckbriefe für die Sehenswürdigkeiten (einfaches Englisch mit Übersetzung)
+  const CARD_INFO = {
+    bigben: { where: 'London, England', when: 'seit 1859', size: '96 m hoch', more: [['The great bell weighs about 13.7 tonnes.', 'Die große Glocke wiegt etwa 13,7 Tonnen.'], ['There are 334 steps up to the bell.', 'Bis zur Glocke sind es 334 Stufen.'], ['In 2012 the tower got a new name: Elizabeth Tower.', '2012 bekam der Turm einen neuen Namen: Elizabeth Tower.']], words: [['bell', 'Glocke'], ['tower', 'Turm'], ['clock', 'Uhr']] },
+    eye: { where: 'London, England', when: 'seit 2000', size: '135 m hoch', more: [['The London Eye has 32 capsules.', 'Das London Eye hat 32 Kabinen.'], ['Each capsule can carry up to 25 people.', 'In jede Kabine passen bis zu 25 Menschen.'], ['On a clear day you can see very far.', 'An einem klaren Tag kann man sehr weit sehen.']], words: [['wheel', 'Rad'], ['capsule', 'Kabine'], ['view', 'Aussicht']] },
+    towerbridge: { where: 'London, England', when: 'seit 1894', size: '244 m lang', more: [['The road in the middle can open up for tall ships.', 'Die Straße in der Mitte kann sich für hohe Schiffe öffnen.'], ['High up, there is a walkway with a glass floor.', 'Weit oben gibt es einen Gang mit Glasboden.'], ['The Tower of London is right next to it.', 'Der Tower of London steht direkt daneben.']], words: [['bridge', 'Brücke'], ['ship', 'Schiff'], ['river', 'Fluss']] },
+    palace: { where: 'London, England', when: 'Königspalast seit 1837', size: '775 Zimmer', more: [['It is the London home of the King.', 'Es ist das Londoner Zuhause des Königs.'], ['When the King is at home, a special flag flies on the roof.', 'Wenn der König da ist, weht eine besondere Flagge auf dem Dach.'], ['Soldiers in red coats guard the palace.', 'Soldaten in roten Jacken bewachen den Palast.']], words: [['king', 'König'], ['palace', 'Palast'], ['guard', 'Wache']] },
+    stonehenge: { where: 'Wiltshire, England', when: 'etwa 5.000 Jahre alt', size: 'Steine bis zu 25 Tonnen', more: [['The big stones are heavier than two buses.', 'Die großen Steine sind schwerer als zwei Busse.'], ['In June the sun rises right over a special stone.', 'Im Juni geht die Sonne genau über einem besonderen Stein auf.'], ['Nobody knows exactly why people built it.', 'Niemand weiß genau, warum die Menschen es gebaut haben.']], words: [['stone', 'Stein'], ['circle', 'Kreis'], ['sun', 'Sonne']] },
+    edinburgh: { where: 'Edinburgh, Schottland', when: 'über 900 Jahre alt', size: 'auf einem alten Vulkan', more: [['Every day except Sunday, a cannon is fired at one o\'clock.', 'Jeden Tag außer sonntags wird um ein Uhr eine Kanone abgefeuert.'], ['The crown of Scotland is kept in the castle.', 'Die schottische Krone wird in der Burg aufbewahrt.'], ['From the castle you can see the whole city.', 'Von der Burg aus sieht man die ganze Stadt.']], words: [['castle', 'Burg'], ['rock', 'Felsen'], ['crown', 'Krone']] },
+    hadrian: { where: 'Norden von England', when: 'seit dem Jahr 122', size: 'etwa 117 km lang', more: [['The wall went from one coast to the other.', 'Die Mauer ging von einer Küste zur anderen.'], ['Roman soldiers lived in forts along the wall.', 'Römische Soldaten lebten in Lagern entlang der Mauer.'], ['You can still walk next to the wall today.', 'Man kann heute noch neben der Mauer wandern.']], words: [['wall', 'Mauer'], ['soldier', 'Soldat'], ['coast', 'Küste']] },
+    thames: { where: 'Südengland, mitten durch London', when: 'fließt in die Nordsee', size: 'etwa 346 km lang', more: [['More than 200 bridges cross the River Thames.', 'Über die Themse führen mehr als 200 Brücken.'], ['Seals live in the river near London.', 'Im Fluss bei London leben Robben.'], ['Boats on the Thames are like buses on the water.', 'Boote auf der Themse sind wie Busse auf dem Wasser.']], words: [['river', 'Fluss'], ['sea', 'Meer'], ['seal', 'Robbe']] },
+    lochness: { where: 'Highlands, Schottland', when: 'entstanden nach der Eiszeit', size: 'etwa 37 km lang, bis 230 m tief', more: [['Loch is the Scottish word for lake.', 'Loch ist das schottische Wort für See.'], ['It has more water than all the lakes in England and Wales together.', 'Er hat mehr Wasser als alle Seen in England und Wales zusammen.'], ['Nobody has ever found Nessie.', 'Niemand hat Nessie je gefunden.']], words: [['lake', 'See'], ['deep', 'tief'], ['monster', 'Ungeheuer']] },
+    bennevis: { where: 'bei Fort William, Schottland', when: 'höchster Berg im UK', size: '1.345 m hoch', more: [['There can be snow on the top even in summer.', 'Auf dem Gipfel kann sogar im Sommer Schnee liegen.'], ['Many thousands of people climb it every year.', 'Jedes Jahr steigen viele Tausend Menschen hinauf.'], ['The top is often in the clouds.', 'Der Gipfel ist oft in den Wolken.']], words: [['mountain', 'Berg'], ['top', 'Gipfel'], ['snow', 'Schnee']] },
+    wyddfa: { where: 'Snowdonia, Wales', when: 'höchster Berg in Wales', size: '1.085 m hoch', more: [['A little train goes almost to the top.', 'Eine kleine Bahn fährt fast bis zum Gipfel.'], ['Yr Wyddfa is a Welsh name.', 'Yr Wyddfa ist ein walisischer Name.'], ['In Wales, people speak English and Welsh.', 'In Wales spricht man Englisch und Walisisch.']], words: [['train', 'Zug'], ['mountain', 'Berg'], ['Welsh', 'walisisch']] },
+  };
+  // Steckbrief als Fenster über der Seite (sichtbar, egal wo man im Album tippt)
+  function cardSheetHtml(c) {
+    const inf = CARD_INFO[c.id];
+    const say = (t) => '<button class="iconbtn small" data-act="say" data-text="' + esc(t) + '" aria-label="Vorlesen">' + ic('speaker') + '</button>';
+    let h = '<div class="sheetback" data-act="closecard"></div><div class="sheet" role="dialog" aria-label="' + esc(c.name) + '"><button class="iconbtn sheetx" data-act="closecard" aria-label="Schließen">' + ic('x') + '</button>' +
+      '<div class="sheethead ' + c.r + '"><span class="sheeticon">' + c.icon + '</span><div><h2>' + esc(c.name) + '</h2><span class="small">' + esc(c.cat) + ' · ' + (c.r === 'golden' ? '★ golden' : c.r) + '</span></div></div>';
+    if (inf) h += '<div class="sheetfacts"><span class="pill">📍 ' + esc(inf.where) + '</span><span class="pill">📅 ' + esc(inf.when) + '</span><span class="pill">📏 ' + esc(inf.size) + '</span></div>';
+    h += '<ul class="sheetlist">' + [[c.en, c.de]].concat(inf ? inf.more : []).map(([en, de]) => '<li><div class="grow"><p class="aen">' + esc(en) + '</p><p class="ade">' + esc(de) + '</p></div>' + say(en) + '</li>').join('') + '</ul>';
+    if (inf) h += '<p class="small" style="margin:10px 0 6px"><b>Wörter zum Merken</b></p><div class="sheetwords">' + inf.words.map(([en, de]) => '<button class="pill" data-act="say" data-text="' + esc(en) + '">' + ic('speaker') + '<b>' + esc(en) + '</b> = ' + esc(de) + '</button>').join('') + '</div>';
+    return h + '<button class="btn" data-act="closecard" style="margin-top:14px;width:100%">Schließen</button></div>';
+  }
   function cardHtml(c, big) {
     return '<div class="acard ' + c.r + (big ? ' big' : '') + '"><div class="aicon">' + c.icon + '</div><div class="aname">' + esc(c.name) + '</div><div class="arar">' + (c.r === 'golden' ? '★ golden' : c.r === 'selten' ? 'selten' : 'normal') + '</div>' +
       (big ? '<p class="aen">' + esc(c.en) + '</p><p class="ade">' + esc(c.de) + '</p><button class="btn small secondary" data-act="say" data-text="' + esc(c.en) + '">' + ic('speaker') + 'Vorlesen</button>' : '') + '</div>';
@@ -1873,7 +1899,7 @@
   function renderAlbum() {
     const g = G(); const cats = ['Sehenswürdigkeiten', 'Alltag', 'Essen', 'Tiere'];
     let h = '<div class="topbar"><button class="iconbtn" data-act="home" aria-label="Zurück">' + ic('back') + '</button><h1>Discover Britain</h1></div><p class="small">' + Object.keys(g.album).length + ' von ' + CARDS.length + ' Karten gesammelt. Neue Karten gibt es in der Schatztruhe.</p>';
-    if (S.cardOpen) { const c = CARDS.find((x) => x.id === S.cardOpen); if (c && g.album[c.id]) h += '<div class="card center">' + cardHtml(c, true) + '<button class="btn ghost" data-act="closecard">Schließen</button></div>'; }
+    if (S.cardOpen) { const c = CARDS.find((x) => x.id === S.cardOpen); if (c && g.album[c.id]) h += cardSheetHtml(c); }
     cats.forEach((cat) => {
       h += '<h3>' + esc(cat) + '</h3><div class="agrid">' + CARDS.filter((c) => c.cat === cat).map((c) => g.album[c.id] ? '<button class="acard-btn" data-act="opencard" data-id="' + c.id + '">' + cardHtml(c) + '</button>' : '<div class="acard locked"><div class="aicon">?</div><div class="aname">???</div><div class="arar">' + (c.r === 'golden' ? '★ golden' : c.r) + '</div></div>').join('') + '</div>';
     });
@@ -2978,8 +3004,8 @@
     openshop: () => { S.view = 'shop'; render(); },
     openalbum: () => { S.cardOpen = null; S.view = 'album'; render(); },
     openbadges: () => { S.view = 'badges'; render(); },
-    opencard: (el) => { S.cardOpen = el.dataset.id; render(); },
-    closecard: () => { S.cardOpen = null; render(); },
+    opencard: (el) => { S.cardOpen = el.dataset.id; rerender(); },
+    closecard: () => { S.cardOpen = null; rerender(); },
     buy: (el) => { const it = SHOP.find((x) => x.id === el.dataset.id), g = G(); if (!it || g.owned.includes(it.id) || g.stars < it.price || !unlocked()) return; g.stars -= it.price; g.owned.push(it.id); g.equipped[it.slot] = it.id; save(); confetti(20); rerender(); },
     equip: (el) => { const it = SHOP.find((x) => x.id === el.dataset.id), g = G(); if (!it || !g.owned.includes(it.id)) return; g.equipped[it.slot] = g.equipped[it.slot] === it.id ? null : it.id; save(); rerender(); },
     startgame: (el) => { if (!unlocked()) return; if (S.G && S.G.timer) clearInterval(S.G.timer); startGame(el.dataset.id); },
