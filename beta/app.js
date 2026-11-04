@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.3.3-beta.1';
+  const APP_VERSION = '2.3.4-beta.1';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -2346,11 +2346,11 @@
       '<div class="row"><label class="btn" style="margin:0">' + ic('camera') + 'Foto der Vokabelseite<input type="file" accept="image/*" data-change="photo" hidden></label>' +
       '<label class="btn secondary" style="margin:0">' + ic('file') + 'Textdatei wählen<input type="file" accept=".txt,.csv,.tsv,text/plain,text/csv" data-change="textfile" hidden></label>' +
       '<button class="btn secondary" data-act="pasteclip">' + ic('clip') + 'Aus Zwischenablage</button></div>' +
-      '<p class="small">Die Fotoerkennung läuft auf dem Gerät und klappt bei sauberen, geraden Seiten (z. B. Vokabelliste vom Lehrer). Bei Buchseiten mit Bildern und Lautschrift ist <b>Google Lens</b> genauer: Text kopieren, hier „Aus Zwischenablage“, dann „Automatisch zuordnen“.</p>' +
+      '<p class="small">Die Fotoerkennung läuft auf dem Gerät und klappt bei sauberen, geraden Seiten (z. B. Vokabelliste vom Lehrer). Bei Buchseiten mit Bildern und Lautschrift ist die Texterkennung des Geräts genauer (Android: <b>Google Lens</b>, iPad: <b>Live Text</b>): Text kopieren, hier „Aus Zwischenablage“, dann „Automatisch zuordnen“.</p>' +
       '<p id="ocrmsg" class="small">' + esc(S.ocrMsg || '') + '</p>' +
       '<label for="imp">Oder eintippen bzw. einfügen – ein Wort pro Zeile:</label><textarea id="imp" placeholder="friend = Freund / Freundin\nto have breakfast = frühstücken\nWhat\'s your name? = Wie heißt du?">' + esc(S.importText) + '</textarea>' +
       '<label class="check"><input type="checkbox" data-change="imppairs" ' + (S.impPairs ? 'checked' : '') + '> Karteikarten: Zeilen abwechselnd Englisch, Deutsch (z. B. aus Google Lens)</label>' +
-      '<button class="btn secondary" data-act="autosort" style="margin-top:6px">' + ic('repeat') + 'Automatisch zuordnen (Text aus Google Lens)</button><p class="small" style="margin-top:4px">Macht aus kopiertem Buchtext Zeilen „englisch = deutsch“. Lautschrift, Seitenzahlen und lange Beispielsätze fallen weg. Danach jede Zeile prüfen; „???“ bitte ergänzen.</p>' +
+      '<button class="btn secondary" data-act="autosort" style="margin-top:6px">' + ic('repeat') + 'Automatisch zuordnen (kopierter Buchtext)</button><p class="small" style="margin-top:4px">Macht aus kopiertem Buchtext Zeilen „englisch = deutsch“. Lautschrift, Seitenzahlen und lange Beispielsätze fallen weg. Danach jede Zeile prüfen; „???“ bitte ergänzen.</p>' +
       '<details><summary><b>Welche Schreibweisen gehen?</b></summary><ul class="small"><li><b>englisch = deutsch</b> (auch mit „ - “ oder „ : “ dazwischen)</li><li>Sätze und Redewendungen genauso: <i>How are you? = Wie geht es dir?</i> (bei Sätzen am besten „=“ verwenden)</li><li>Mehrere Bedeutungen mit Schrägstrich: <i>Freund / Freundin</i></li><li>Mit Hinweis: <i>child ; Kind ; Plural: children</i></li><li>Aus Excel kopiert (Spalten Englisch, Deutsch) oder im vollen Importformat mit Kopfzeile:<br><code>unit;seite;englisch;deutsch;wortart;hinweis;beispiel_en;beispiel_de;aussprache</code></li><li>Textdatei: dieselben Schreibweisen, gespeichert als .txt oder .csv (in Excel: „Speichern unter → CSV“)</li></ul></details>' +
       '<div class="row" style="margin-top:10px"><button class="btn secondary" data-act="sample">20 Testwörter</button><button class="btn" data-act="preview">3. Vorschau</button></div></div>';
     if (S.preview) {
@@ -2535,7 +2535,7 @@
       const { data } = await w.recognize(img);
       await w.terminate();
       const r = ocrLinesToText(data.lines || []);
-      if (!r.text) { setMsg('Auf dem Foto wurden keine Vokabeln erkannt. Tipp: gerade von oben, hell, ohne Schatten. Bei Buchseiten mit Bildern klappt Google Lens + „Automatisch zuordnen“ besser.'); return; }
+      if (!r.text) { setMsg('Auf dem Foto wurden keine Vokabeln erkannt. Tipp: gerade von oben, hell, ohne Schatten. Bei Buchseiten mit Bildern klappt die Texterkennung des Geräts (Google Lens bzw. Live Text) + „Automatisch zuordnen“ besser.'); return; }
       if (r.page && !S.impPage) S.impPage = r.page;
       addImportText(r.text);
       setMsg(r.text.split('\n').length + ' Zeilen erkannt. Bitte jede Zeile mit dem Buch vergleichen und im Textfeld korrigieren, dann „Vorschau“.');
