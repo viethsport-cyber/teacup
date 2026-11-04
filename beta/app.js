@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.3.2-beta.1';
+  const APP_VERSION = '2.3.3-beta.1';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -318,8 +318,8 @@
     });
   }
   const speechErrorText = (err) => ({
-    'not-allowed': 'Das Mikrofon ist nicht erlaubt. Bitte in Chrome freigeben.',
-    'service-not-allowed': 'Das Mikrofon ist nicht erlaubt. Bitte in Chrome freigeben.',
+    'not-allowed': 'Das Mikrofon ist nicht erlaubt. Bitte in den Einstellungen des Browsers freigeben.',
+    'service-not-allowed': 'Das Mikrofon ist nicht erlaubt. Bitte in den Einstellungen des Browsers freigeben.',
     'network': 'Keine Internetverbindung für die Spracherkennung.',
     'no-speech': 'Ich habe nichts gehört. Tippe aufs Mikrofon und sprich deutlich.',
     'audio-capture': 'Kein Mikrofon gefunden.'
@@ -1089,7 +1089,7 @@
   function setDe(ok, answer) { const T = curTask(); T.deOk = ok; T.deAnswer = answer; logEvent('en', T, ok, answer, false); save(); if (S.R.exam) return; if (T.pass === 1 && ok) S.R.firstOk2++; beep(ok); if (ok) setTimeout(() => confetti(14), 60); }
   // Hinweis, warum die Aussprache gerade nicht automatisch geprüft wird
   function sayCheckOffHtml() {
-    const why = !SR ? 'Dieser Browser kann keine Sprache erkennen (bitte Chrome nutzen).' : !D.settings.speech ? 'Die Aussprache-Prüfung ist ausgeschaltet. Eltern können sie unter Einstellungen → Spracherkennung einschalten.' : !navigator.onLine ? 'Ohne Internet kann die Aussprache nicht geprüft werden.' : '';
+    const why = !SR ? 'Dieser Browser kann keine Sprache erkennen (Android: Chrome nutzen, iPad: Safari).' : !D.settings.speech ? 'Die Aussprache-Prüfung ist ausgeschaltet. Eltern können sie unter Einstellungen → Spracherkennung einschalten.' : !navigator.onLine ? 'Ohne Internet kann die Aussprache nicht geprüft werden.' : '';
     return why ? '<p class="small center">' + ic('bulb') + ' ' + esc(why) + ' Bis dahin: anhören, aufnehmen, vergleichen.</p>' : '';
   }
   function repeatHtml(T, v) {
@@ -1208,7 +1208,7 @@
       mr.onstop = () => { stream.getTracks().forEach((t) => t.stop()); recState.url = URL.createObjectURL(new Blob(chunks, { type: mr.mimeType || 'audio/webm' })); recState.recording = false; rerender(); };
       mr.start(); rerender();
       setTimeout(() => { if (recState && recState.mr === mr && mr.state === 'recording') mr.stop(); }, 4000);
-    } catch (e) { toast('Das Mikrofon ist nicht erlaubt. Bitte in Chrome freigeben.'); }
+    } catch (e) { toast('Das Mikrofon ist nicht erlaubt. Bitte in den Einstellungen des Browsers freigeben.'); }
   }
   async function recCompare() {
     if (!recState || !recState.url) return;
@@ -2811,8 +2811,8 @@
       '<label class="check"><input type="checkbox" data-change="autoapprove" ' + (s.autoApprove ? 'checked' : '') + '> Neue Beispielsätze und Aussprachetipps sofort aktiv (Durchsehen unter „Prüfen“)</label>' +
       '<label class="check"><input type="checkbox" data-change="sound" ' + (s.sound ? 'checked' : '') + '> Töne bei richtig und falsch</label>' +
       '<label for="s-theme">Darstellung</label><select id="s-theme" data-change="theme"><option value="auto"' + (s.theme === 'auto' ? ' selected' : '') + '>Automatisch (wie das Gerät)</option><option value="light"' + (s.theme === 'light' ? ' selected' : '') + '>Hell</option><option value="dark"' + (s.theme === 'dark' ? ' selected' : '') + '>Dunkel</option></select></div>' +
-      '<div class="card"><h3 style="margin-top:0">Spracherkennung</h3>' + (SR ? '' : '<p class="pill bad">Dieser Browser hat keine Spracherkennung. Bitte Chrome verwenden.</p>') +
-      '<p class="small">Datenschutz-Hinweis: Die Spracherkennung von Chrome schickt die Sprachaufnahme zur Auswertung an Google. Dafür braucht es Internet. Die App selbst speichert keine Aufnahmen. Ist die Erkennung aus, spricht Ihr Kind laut und bewertet sich selbst.</p>' +
+      '<div class="card"><h3 style="margin-top:0">Spracherkennung</h3>' + (SR ? '' : '<p class="pill bad">Dieser Browser hat keine Spracherkennung. Auf Android bitte Chrome, auf dem iPad Safari verwenden (dort muss die Diktierfunktion eingeschaltet sein).</p>') +
+      '<p class="small">Datenschutz-Hinweis: Die Spracherkennung des Browsers schickt die Sprachaufnahme zur Auswertung an den Hersteller (Chrome: Google, iPad/Safari: Apple). Dafür braucht es Internet. Die App selbst speichert keine Aufnahmen. Ist die Erkennung aus, spricht Ihr Kind laut und bewertet sich selbst.</p>' +
       (s.speech ? '<p><span class="pill good">eingeschaltet</span></p><button class="btn secondary" data-act="speechoff">Ausschalten</button> <button class="btn secondary" data-act="mictest">Mikrofon testen</button>'
         : '<button class="btn" data-act="speechon"' + (SR ? '' : ' disabled') + '>Hinweis gelesen, einschalten</button>') + '<p id="mictest" class="small"></p></div>' +
       voiceHtml() +
@@ -2822,16 +2822,18 @@
       '<div class="card"><button class="btn secondary" data-act="changepin">PIN ändern</button>' + (installEvt ? ' <button class="btn secondary" data-act="install">App installieren</button>' : '') + '<p class="small">Teacup Version ' + APP_VERSION + ' · Alle Daten bleiben auf diesem Gerät.</p></div>';
   }
 
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  const IOS_VOICE = 'iPad: Einstellungen → Bedienungshilfen → Gesprochene Inhalte → Stimmen → Englisch → Englisch (Vereinigtes Königreich) → eine weibliche Stimme laden, z. B. „Kate“ oder „Serena“ (am besten „Erweitert“). Danach Teacup schließen und neu öffnen.';
   function voiceHtml() {
     const gb = gbVoices(), cur = gbVoice();
     let h = '<div class="card"><h3 style="margin-top:0">' + ic('speaker') + 'Stimme zum Vorsprechen</h3>';
-    if (!gb.length) h += '<p>Noch keine britische Stimme gefunden. Android: Einstellungen → System → Sprachen → Sprachausgabe (Text-in-Sprache) → Google → Zahnrad → „Sprachdaten installieren“ → „Englisch (Vereinigtes Königreich)“.</p>';
+    if (!gb.length) h += '<p>Noch keine britische Stimme gefunden. ' + (isIOS ? IOS_VOICE : 'Android: Einstellungen → System → Sprachen → Sprachausgabe (Text-in-Sprache) → Google → Zahnrad → „Sprachdaten installieren“ → „Englisch (Vereinigtes Königreich)“.') + '</p>';
     else {
       h += '<p class="small">Britische Stimmen auf diesem Gerät. Mit ▶ probehören, mit „Wählen“ festlegen.</p><ul class="list">' + gb.map((v) =>
         '<li><span class="grow"><span class="en">' + esc(v.name) + '</span>' + (isFemale(v) ? ' <span class="pill warn">weiblich</span>' : '') + (cur && cur.name === v.name ? ' <span class="pill good">aktiv</span>' : '') + '</span>' +
         '<button class="iconbtn" data-act="tryvoice" data-name="' + esc(v.name) + '" aria-label="Probehören">' + ic('speaker') + '</button>' +
         (cur && cur.name === v.name ? '' : '<button class="btn small secondary" data-act="pickvoice" data-name="' + esc(v.name) + '">Wählen</button>') + '</li>').join('') + '</ul>';
-      if (gb.length === 1 || !gb.some(isFemale)) h += '<div class="tip">' + ic('bulb') + '<span>Auf Android-Handys zeigt Chrome meist nur <b>eine</b> britische Stimme. Ob sie weiblich ist, stellen Sie im Handy ein: Einstellungen → System → Sprachen → Sprachausgabe → Google → Zahnrad → Sprache „Englisch (Vereinigtes Königreich)“ → eine weibliche Stimme wählen. Dort auch „Nur WLAN“/„Hohe Qualität“ wählen: Das klingt deutlich klarer.</span></div>';
+      if (gb.length === 1 || !gb.some(isFemale)) h += '<div class="tip">' + ic('bulb') + (isIOS ? '<span>' + IOS_VOICE + '</span></div>' : '<span>Auf Android-Handys zeigt Chrome meist nur <b>eine</b> britische Stimme. Ob sie weiblich ist, stellen Sie im Handy ein: Einstellungen → System → Sprachen → Sprachausgabe → Google → Zahnrad → Sprache „Englisch (Vereinigtes Königreich)“ → eine weibliche Stimme wählen. Dort auch „Nur WLAN“/„Hohe Qualität“ wählen: Das klingt deutlich klarer.</span></div>');
     }
     h += '<label for="s-slow">Tempo bei „Langsam“</label><select id="s-slow" data-change="slowspeed">' + Object.keys(SLOW_RATES).map((k) => '<option' + (D.settings.slowSpeed === k ? ' selected' : '') + '>' + k + '</option>').join('') + '</select>' +
       '<p class="small">Bei Sätzen spricht „Langsam“ zusätzlich Wort für Wort mit kleinen Pausen.</p>' +
@@ -3255,7 +3257,7 @@
     },
     approve: (el) => { vocabById(el.dataset.id).checked = true; save(); rerender(); },
     approveall: () => { if (!confirm('Alle Zusatzinhalte freigeben? Bitte vorher durchlesen.')) return; D.vocab.forEach((v) => { if (needsReview(v)) v.checked = true; }); save(); rerender(); },
-    speechon: () => { D.settings.speech = true; save(); rerender(); toast('Spracherkennung eingeschaltet. Chrome fragt beim ersten Mal nach dem Mikrofon: bitte erlauben.'); },
+    speechon: () => { D.settings.speech = true; save(); rerender(); toast('Spracherkennung eingeschaltet. Beim ersten Mal fragt das Gerät nach dem Mikrofon: bitte erlauben.'); },
     speechoff: () => { D.settings.speech = false; save(); rerender(); },
     mictest: async () => {
       const out = $('#mictest'); out.textContent = 'Bitte jetzt „hello“ sagen …';
