@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.3.4';
+  const APP_VERSION = '2.3.5';
   const STORE_KEY = 'teacup-data';
   const LIVE_KEY = 'teacup-data';
   const BETA = false;
@@ -2308,14 +2308,17 @@
       rec.existing = u ? D.vocab.find((v) => v.unitId === u.id && cmpEn(v.en).toLowerCase() === cmpEn(rec.en).toLowerCase()) : null;
       rec.newUnit = !u;
       // Schon in einer anderen Unit vorhanden (z. B. von Karteikarten in „Sonstige Wörter“)?
-      if (!rec.existing && rec.en) { const o = findElsewhere(rec.en, u ? u.id : null); if (o) { const ou = D.units.find((x) => x.id === o.unitId); rec.elsewhere = o; rec.elsewhereUnit = ou ? ou.name : '?'; } }
+      if (!rec.existing && rec.en) { const o = findElsewhere(rec.en, u ? u.id : null, rec.de); if (o) { const ou = D.units.find((x) => x.id === o.unitId); rec.elsewhere = o; rec.elsewhereUnit = ou ? ou.name : '?'; } }
       return rec;
     });
   }
   // Gleiches Wort, auch bei kleinen Unterschieden wie „to like“ / „like“ oder „Mum“ / „mum“
   const wordKey = (s) => cmpEn(s).toLowerCase().replace(/^(to|a|an|the)\s+(?=\S)/, '').trim();
-  function findElsewhere(en, unitId) {
-    const k = wordKey(en), hits = D.vocab.filter((v) => v.unitId !== unitId && wordKey(v.en) === k);
+  // Gleiches Wort nur, wenn sich auch eine deutsche Bedeutung deckt: „like = wie“ ist nicht „to like = mögen“
+  const deKey = (d) => String(d).toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-zäöüß ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const deOverlap = (a, b) => !a || !a.length || !b || !b.length || a.some((x) => b.some((y) => deKey(x) && deKey(x) === deKey(y)));
+  function findElsewhere(en, unitId, de) {
+    const k = wordKey(en), hits = D.vocab.filter((v) => v.unitId !== unitId && wordKey(v.en) === k && deOverlap(de, v.de));
     if (!hits.length) return null;
     const noU = D.units.filter((x) => x.name === NO_UNIT).map((x) => x.id);
     return hits.find((v) => noU.includes(v.unitId)) || hits[0];
@@ -2572,7 +2575,7 @@
       if (has(r.exEn) !== has(r.exDe)) { if (has(r.exEn)) fields.exDe = '\u0000'; else fields.exEn = '\u0000'; }
       if (!v && S.impMove !== false) {
         // Aus anderer Unit herüberholen: Bedeutungen zusammenführen, Lernstand (Box, Verlauf) bleibt
-        v = findElsewhere(r.en, u.id);
+        v = findElsewhere(r.en, u.id, r.de);
         if (v) { const low = r.de.map((d) => d.toLowerCase()); fields.de = r.de.concat((v.de || []).filter((d) => !low.includes(d.toLowerCase()))); moved++; }
       }
       if (v) {
