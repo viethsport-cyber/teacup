@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.3.6-beta.1';
+  const APP_VERSION = '2.3.7-beta.1';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -392,11 +392,13 @@
     if (g.ok) return g;
     const parts = String(answer).split(/\s*(?:,|;|\/|\bor\b|\band\b|\boder\b|\bund\b)\s*/i).map((x) => x.trim()).filter(Boolean);
     if (parts.length > 1) for (const p of parts) { const g2 = gradeEn(p, v); if (g2.ok) return Object.assign({}, g2, { kind: 'multi' }); }
-    const keys = deList(v).map(deBase).filter(Boolean);
-    if (keys.length) for (const o of D.vocab) {
+    // Nur wenn beide Wörter genau dieselben Bedeutungen haben (little = small = „klein“), Klammern zählen mit:
+    // „sie“ (she) ist nicht „sie (Plural)“ (they), „es / er / sie“ (it) ist nicht „sie“ (she)
+    const full = (x) => deList(x).map((d) => String(d).toLowerCase().replace(/[^a-zäöüß…() ]/g, ' ').replace(/\s+/g, ' ').trim()).sort().join('|');
+    const mine = full(v);
+    if (mine) for (const o of D.vocab) {
       if (o === v || o.id === v.id) continue;
-      const ok = deList(o).map(deBase);
-      if (keys.every((k) => ok.includes(k)) && gradeEn(answer, o).ok) return { ok: true, kind: 'synonym', target: v.en, other: o.en };
+      if (full(o) === mine && gradeEn(answer, o).ok) return { ok: true, kind: 'synonym', target: v.en, other: o.en };
     }
     return g;
   }
@@ -3414,6 +3416,12 @@
     const BOOK_EX = {"We're from Greenwich.": "Wir sind aus Greenwich.", "Hello, I'm Pia.": "Hallo, ich bin Pia.", "I'm Luke.": "Ich bin Luke.", "What's your name? – I'm Olivia.": "Wie heißt du? – Ich bin Olivia.", "Dave is nice. He's my friend.": "Dave ist nett. Er ist mein Freund.", "Pia is from Cologne. – She's from Cologne.": "Pia ist aus Köln. – Sie ist aus Köln.", "I like horses.": "Ich mag Pferde.", "Greenwich Park is big.": "Der Greenwich Park ist groß.", "My favourite sport is football.": "Mein Lieblingssport ist Fußball.", "Luke is at home.": "Luke ist zu Hause.", "We live in Greenwich.": "Wir wohnen in Greenwich.", "The cooker is in the kitchen.": "Der Herd ist in der Küche.", "Here's a biscuit for you, Sherlock.": "Hier ist ein Keks für dich, Sherlock."};
     D.vocab.forEach((v) => { const de = v.exEn && BOOK_EX[tidyEn(v.exEn)]; if (de && v.exDe !== de) v.exDe = de; });
     D.fixEx211 = true; save();
+  }
+  // Einmalig (2.3.6): fachlich falsche Zusatzbedeutungen aus Karteikarten entfernen
+  if (!D.fixDe236) {
+    const WRONG = [['mouse', 'Mäuse'], ['hobby', 'Hobbys'], ['to love', 'Liebe'], ['Come in.', 'hereinkommen']];
+    D.vocab.forEach((v) => WRONG.forEach(([en, de]) => { if (cmpEn(v.en).toLowerCase() === cmpEn(en).toLowerCase() && v.de.length > 1) v.de = v.de.filter((d) => d.trim().toLowerCase() !== de.toLowerCase()); }));
+    D.fixDe236 = true; save();
   }
   render();
 })();
