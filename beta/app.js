@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.3.5-beta.1';
+  const APP_VERSION = '2.3.6-beta.1';
   const STORE_KEY = 'teacup-beta-data';
   const LIVE_KEY = 'teacup-data';  // Testversion: Daten der normalen App nur lesen, nie schreiben
   const BETA = true;
@@ -165,7 +165,10 @@
   const prog = (vid) => D.progress[vid] || (D.progress[vid] = { box: 1, due: today(), seen: false, right: 0, wrong: 0 });
   const hasExtra = (v) => !!(v.exEn || v.exDe || v.tip);
   const needsReview = (v) => hasExtra(v) && !v.checked;
-  const deText = (v) => v.de.join(' / ');
+  // Bedeutungen ohne Dopplungen: „sie (Plural) / sie (Mehrzahl)“ wird zu „sie (Plural)“
+  const deBase = (d) => String(d).toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-zäöüß… ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const deList = (v) => { const seen = new Set(); return (v.de || []).filter((d) => { const k = deBase(d) || d; if (seen.has(k)) return false; seen.add(k); return true; }); };
+  const deText = (v) => deList(v).join(' / ');
   function applyTheme() {
     const t = D.settings.theme;
     if (t === 'auto') document.documentElement.removeAttribute('data-theme');
@@ -381,6 +384,21 @@
       return Object.assign({ ok: false, kind: swapped ? 'swap' : 'near', target: best }, extra);
     }
     return Object.assign({ ok: false, kind: 'wrong', target: best }, extra);
+  }
+  // Antwort prüfen, auch wenn das Kind mehrere Wörter aufzählt („it, he, she“) oder ein gleichbedeutendes
+  // Wort schreibt („small“ statt „little“, beide = „klein“)
+  function gradeAnswer(answer, v) {
+    const g = gradeEn(answer, v);
+    if (g.ok) return g;
+    const parts = String(answer).split(/\s*(?:,|;|\/|\bor\b|\band\b|\boder\b|\bund\b)\s*/i).map((x) => x.trim()).filter(Boolean);
+    if (parts.length > 1) for (const p of parts) { const g2 = gradeEn(p, v); if (g2.ok) return Object.assign({}, g2, { kind: 'multi' }); }
+    const keys = deList(v).map(deBase).filter(Boolean);
+    if (keys.length) for (const o of D.vocab) {
+      if (o === v || o.id === v.id) continue;
+      const ok = deList(o).map(deBase);
+      if (keys.every((k) => ok.includes(k)) && gradeEn(answer, o).ok) return { ok: true, kind: 'synonym', target: v.en, other: o.en };
+    }
+    return g;
   }
   // Buchstabengenaue Gegenüberstellung von Antwort und Lösung
   function diffOps(a, b) {
@@ -1003,7 +1021,7 @@
     if (T.phase === 'write') {
       const fc = S.R.focusCat && catById(S.R.focusCat);
       if (fc && T.pass === 1 && S.R.i === 0) body += '<div class="tip">' + ic('target') + '<b>Dein Schwerpunkt:</b> ' + esc(fc.tip) + '</div>';
-      body += '<div class="card"><div class="prompt"><div class="label">Wie heißt das auf Englisch?</div><div class="word' + (deText(v).length > 24 ? ' long' : '') + '">' + esc(deText(v)) + '</div><div class="meta">' + esc(meta) + '</div></div>';
+      body += '<div class="card"><div class="prompt"><div class="label">Wie heißt das auf Englisch?</div><div class="word' + (deText(v).length > 24 ? ' long' : '') + '">' + esc(deText(v)) + '</div>' + (deList(v).length > 1 && !v.en.includes(' ') ? '<div class="small muted">Ein englisches Wort mit mehreren Bedeutungen</div>' : '') + '<div class="meta">' + esc(meta) + '</div></div>';
       if (S.R.paper) body += '<p class="center">Schreib das englische Wort auf dein Papier.</p><button class="btn big" data-act="reveal">Aufdecken</button></div>';
       else body += '<input type="text" id="ans" class="answer-input" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" lang="en" placeholder="englisches Wort" data-enter="check">' +
         '<div class="row" style="margin-top:12px"><button class="btn secondary" data-act="dontknow">Weiß ich nicht</button><button class="btn" data-act="check">Prüfen</button></div></div>';
@@ -1031,7 +1049,7 @@
     const g = T.grade || { kind: T.writeOk ? 'ok' : 'wrong', target: v.en };
     let h;
     if (T.writeOk) {
-      const formHint = g.kind === 'longform' ? 'Richtig! Lang- und Kurzform sind beide richtig. Im Buch steht die Kurzform:' : g.kind === 'shortform' ? 'Richtig! Kurz- und Langform sind beide richtig. Im Buch steht die Langform:' : '';
+      const formHint = g.kind === 'longform' ? 'Richtig! Lang- und Kurzform sind beide richtig. Im Buch steht die Kurzform:' : g.kind === 'shortform' ? 'Richtig! Kurz- und Langform sind beide richtig. Im Buch steht die Langform:' : g.kind === 'multi' ? 'Richtig! Gesucht war aber nur ein Wort:' : g.kind === 'synonym' ? 'Richtig! „' + g.other + '“ heißt auch so. Hier gesucht war:' : '';
       if (formHint) h = '<div class="card good pop"><p class="feedback">✓ Richtig!</p><div class="tip">' + ic('bulb') + esc(formHint.replace('Richtig! ', '')) + '</div><div class="solution' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div>';
       else h = '<div class="card good pop"><p class="feedback">✓ ' + esc(pick(['Richtig!', 'Super!', 'Klasse!', 'Genau!'])) + '</p><div class="solution' + (v.en.length > 24 ? ' long' : '') + '">' + esc(v.en) + '</div>';
     } else {
@@ -3121,10 +3139,10 @@
     lcheckwrite: () => {
       const t = curL(), v = vocabById(t.vid), el = $('#lans'); if (!el) return; const val = el.value; if (!val.trim()) return el.focus();
       if (t.type === 'gap') { const g = gapFor(v); const ok = expandEn(cmpEn(val)).toLowerCase() === expandEn(cmpEn(g.answer)).toLowerCase() || gradeEn(val, v).ok; return lessonAnswer(ok, val, { msg: ok ? '' : 'Noch nicht ganz. Richtig ist „' + g.answer + '“.' }); }
-      const g = gradeEn(val, v); let diff = '';
+      const g = gradeAnswer(val, v); let diff = '';
       const gt = g.cmp || g.target;
       if (!g.ok && lev(cmpEn(val).toLowerCase(), gt.toLowerCase()) <= Math.ceil(gt.length / 2)) { const d = renderDiff(val, gt); diff = '<p class="center small" style="margin-bottom:0">Deine Antwort</p><div class="diff">' + d.mine + '</div><div class="diff">' + d.sol + '</div>' + formNoteHtml(g); }
-      const msg = g.ok ? (g.kind === 'longform' ? '✓ Richtig! Beide Formen gehen. Im Buch steht die Kurzform.' : g.kind === 'shortform' ? '✓ Richtig! Beide Formen gehen. Im Buch steht die Langform.' : '') : ({ near: 'Fast! Nur ein Buchstabe ist anders.', swap: 'Fast! Zwei Buchstaben sind vertauscht.', case: 'Fast! Achte auf die Großschreibung.' }[g.kind] || 'Noch nicht ganz.');
+      const msg = g.ok ? (g.kind === 'longform' ? '✓ Richtig! Beide Formen gehen. Im Buch steht die Kurzform.' : g.kind === 'shortform' ? '✓ Richtig! Beide Formen gehen. Im Buch steht die Langform.' : g.kind === 'multi' ? '✓ Richtig! Gesucht war nur ein Wort: ' + v.en : g.kind === 'synonym' ? '✓ Auch richtig! Gesucht war hier: ' + v.en : '') : ({ near: 'Fast! Nur ein Buchstabe ist anders.', swap: 'Fast! Zwei Buchstaben sind vertauscht.', case: 'Fast! Achte auf die Großschreibung.' }[g.kind] || 'Noch nicht ganz.');
       lessonAnswer(g.ok, val, { grade: g, diff, msg });
     },
     ldontknow: () => lessonAnswer(false, '', { msg: 'Kein Problem, so lernst du es jetzt.' }),
@@ -3147,7 +3165,7 @@
     check: () => {
       const T = curTask(), v = vocabById(T.vid), val = $('#ans').value;
       if (!val.trim()) { $('#ans').focus(); return; }
-      const g = gradeEn(val, v); setWrite(g.ok, val, g); if (S.R.exam) return nextPhase(); T.phase = 'check'; T.ui = {}; tick(); render();
+      const g = gradeAnswer(val, v); setWrite(g.ok, val, g); if (S.R.exam) return nextPhase(); T.phase = 'check'; T.ui = {}; tick(); render();
     },
     dontknow: () => { const T = curTask(), v = vocabById(T.vid); setWrite(false, '', { kind: 'empty', target: v.en }); if (S.R.exam) return nextPhase(); T.phase = 'check'; T.ui = {}; tick(); render(); },
     reveal: () => { const T = curTask(); T.phase = 'check'; T.ui = {}; tick(); render(); },
@@ -3360,7 +3378,7 @@
   if (!D.autoTipsV1) { D.vocab.forEach((v) => { if (!v.tip) { v.tip = autoTip(v.en); v.tipAuto = !!v.tip; if (v.tip && !v.exEn && !v.exDe) v.checked = true; } }); D.autoTipsV1 = true; save(); }
 
   // Für die automatischen Tests
-  window.__teacup = { autoSortText, gradeEn, matchDe, matchEnSpeech, trackWrite, weakCats, catsIn, data: () => D, version: APP_VERSION, syllables, buildLesson: (ids) => buildLesson(ids.map(vocabById)), stations, lesson: () => S.L && { i: S.L.i, n: S.L.tasks.length, t: S.L.tasks[S.L.i] }, todayStr: today, openChestForTest: () => { const v = S.view; openChest(); S.view = v; }, gapFor: (id) => gapFor(vocabById(id)), state: () => S };
+  window.__teacup = { autoSortText, gradeEn, gradeAnswer, deText, matchDe, matchEnSpeech, trackWrite, weakCats, catsIn, data: () => D, version: APP_VERSION, syllables, buildLesson: (ids) => buildLesson(ids.map(vocabById)), stations, lesson: () => S.L && { i: S.L.i, n: S.L.tasks.length, t: S.L.tasks[S.L.i] }, todayStr: today, openChestForTest: () => { const v = S.view; openChest(); S.view = v; }, gapFor: (id) => gapFor(vocabById(id)), state: () => S };
   // Einmalig nach dem Update auf 2.0.3: heute schon freiwillig Geübtes nachträglich in die Lernkartei übernehmen
   if (!D.catchup203) {
     const t = today(), skip = ['probe', 'boss', 'game'];
