@@ -2,7 +2,7 @@
 /* Teacup – Englisch-Vokabeln (Stufe 1: Grundgerüst und Karteikarten)
    Alle Daten liegen nur auf diesem Gerät (localStorage). Kein Server, keine Anmeldung. */
 (() => {
-  const APP_VERSION = '2.3.7';
+  const APP_VERSION = '2.3.8';
   const STORE_KEY = 'teacup-data';
   const LIVE_KEY = 'teacup-data';
   const BETA = false;
@@ -3422,6 +3422,26 @@
     const WRONG = [['mouse', 'Mäuse'], ['hobby', 'Hobbys'], ['to love', 'Liebe'], ['Come in.', 'hereinkommen']];
     D.vocab.forEach((v) => WRONG.forEach(([en, de]) => { if (cmpEn(v.en).toLowerCase() === cmpEn(en).toLowerCase() && v.de.length > 1) v.de = v.de.filter((d) => d.trim().toLowerCase() !== de.toLowerCase()); }));
     D.fixDe236 = true; save();
+  }
+  // Einmalig (2.3.8): frühere Antworten nach den neuen Regeln nachprüfen (Aufzählung, gleichbedeutende Wörter,
+  // Lang-/Kurzform). War eine als falsch gewertete Antwort eigentlich richtig, zählt sie nachträglich als richtig.
+  if (!D.regrade238) {
+    let n = 0;
+    const last = {};
+    (D.sessions || []).forEach((x) => (x.ev || []).forEach((e) => { if (e.d === 'de' && e.v) last[e.v] = Math.max(last[e.v] || 0, e.t || 0); }));
+    (D.sessions || []).forEach((x) => (x.ev || []).forEach((e) => {
+      if (e.d !== 'de' || e.ok || !e.a || !e.v) return;
+      const v = vocabById(e.v); if (!v || !gradeAnswer(e.a, v).ok) return;
+      e.ok = true; e.regraded = 1; n++;
+      if (e.p !== 1 || ['probe', 'boss', 'game'].includes(x.mode)) return;
+      const p = prog(v.id); p.wrong = Math.max(0, (p.wrong || 0) - 1); p.right = (p.right || 0) + 1;
+      // War das die letzte Antwort zu diesem Wort, bekommt es sein Fach zurück (plus eins für die richtige Antwort)
+      if (e.t === last[e.v] && p.prev && p.box === 1 && p.lastOk === false) {
+        p.box = Math.min((p.prev.box || 1) + 1, 6); p.due = addDays(p.prev.day || today(), INTERVAL[p.box]); p.lastOk = true;
+      }
+    }));
+    D.regrade238 = { day: today(), n }; save();
+    if (n) setTimeout(() => toast(n + (n === 1 ? ' frühere Antwort wurde' : ' frühere Antworten wurden') + ' nachträglich als richtig gewertet. Gut gemacht!'), 900);
   }
   render();
 })();
